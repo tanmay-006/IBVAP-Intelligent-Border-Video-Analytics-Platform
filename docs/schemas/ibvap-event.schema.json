@@ -1,0 +1,438 @@
+{
+  "$defs": {
+    "AlertStatus": {
+      "enum": [
+        "generated",
+        "delivered",
+        "acknowledged",
+        "verified",
+        "rejected",
+        "escalated",
+        "closed"
+      ],
+      "title": "AlertStatus",
+      "type": "string"
+    },
+    "DecisionSource": {
+      "enum": [
+        "jev",
+        "rules_fallback",
+        "rules_override"
+      ],
+      "title": "DecisionSource",
+      "type": "string"
+    },
+    "Direction": {
+      "description": "Direction relative to the border, as configured per tripwire.",
+      "enum": [
+        "inbound",
+        "outbound",
+        "along",
+        "unknown"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "EventType": {
+      "enum": [
+        "detection",
+        "tripwire_crossing",
+        "restricted_zone_entry",
+        "night_movement",
+        "loitering",
+        "vehicle_stopped",
+        "approach_retreat",
+        "wrong_direction",
+        "group_forming",
+        "plate_read",
+        "face_detected",
+        "camera_health"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "Explanation": {
+      "additionalProperties": false,
+      "description": "Why the alert fired, shown to the operator (CLAUDE.md \u00a79).",
+      "properties": {
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "title": "Parameters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "Explanation",
+      "type": "object"
+    },
+    "JevDecision": {
+      "additionalProperties": false,
+      "description": "Triage result from Jev. Built only from text/JSON event descriptions.",
+      "properties": {
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "escalate": {
+          "title": "Escalate",
+          "type": "boolean"
+        },
+        "false_positive_likelihood": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "False Positive Likelihood",
+          "type": "number"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "reasoning": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning"
+        },
+        "latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Ms"
+        }
+      },
+      "required": [
+        "severity",
+        "escalate",
+        "false_positive_likelihood",
+        "confidence"
+      ],
+      "title": "JevDecision",
+      "type": "object"
+    },
+    "ObjectType": {
+      "enum": [
+        "person",
+        "car",
+        "motorcycle",
+        "bicycle",
+        "bus",
+        "truck",
+        "animal",
+        "face",
+        "license_plate",
+        "other"
+      ],
+      "title": "ObjectType",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "informational",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "SyncStatus": {
+      "enum": [
+        "pending",
+        "synced",
+        "failed"
+      ],
+      "title": "SyncStatus",
+      "type": "string"
+    },
+    "Versions": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Detector model version that produced the detection",
+          "title": "Model"
+        },
+        "rule_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rule that fired; None for raw detections",
+          "title": "Rule Id"
+        },
+        "rule_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Version"
+        }
+      },
+      "title": "Versions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "site_id": {
+      "description": "BOP identifier",
+      "minLength": 1,
+      "title": "Site Id",
+      "type": "string"
+    },
+    "camera_id": {
+      "minLength": 1,
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "event_type": {
+      "$ref": "#/$defs/EventType"
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "timestamp": {
+      "description": "When the event occurred (UTC); preserved across sync",
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "object_type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ObjectType"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "tracking_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Frigate tracked-object id; never a confirmed identity",
+      "title": "Tracking Id"
+    },
+    "detection_confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detection Confidence"
+    },
+    "zone_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Zone Id"
+    },
+    "direction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Direction"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "snapshot_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Snapshot Ref"
+    },
+    "clip_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Clip Ref"
+    },
+    "plate_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plate Text"
+    },
+    "plate_confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plate Confidence"
+    },
+    "plate_needs_review": {
+      "default": false,
+      "title": "Plate Needs Review",
+      "type": "boolean"
+    },
+    "versions": {
+      "$ref": "#/$defs/Versions"
+    },
+    "explanation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Explanation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "jev_decision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JevDecision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "decision_source": {
+      "$ref": "#/$defs/DecisionSource",
+      "default": "rules_fallback"
+    },
+    "status": {
+      "$ref": "#/$defs/AlertStatus",
+      "default": "generated"
+    },
+    "evidence_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "SHA-256, lowercase hex",
+      "title": "Evidence Hash"
+    },
+    "ledger_tx_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ledger Tx Id"
+    },
+    "sync_status": {
+      "$ref": "#/$defs/SyncStatus",
+      "default": "pending"
+    }
+  },
+  "required": [
+    "site_id",
+    "camera_id",
+    "event_type",
+    "severity",
+    "timestamp"
+  ],
+  "title": "IBVAPEvent",
+  "type": "object"
+}

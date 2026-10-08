@@ -1,0 +1,41 @@
+# Secrets and local environment
+.env
+*.env
+!*.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+dashboard/dist/
+
+# Runtime data (recordings, databases, evidence, ledger state)
+deploy/data/
+*.db
+*.sqlite3
+evidence/
+trust-layer/organizations/
+trust-layer/channel-artifacts/
+
+# Sample media: commit only footage we have rights to; large files stay out of git
+samples/**/*.mp4
+samples/**/*.mkv
+samples/**/*.avi
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
