@@ -1,0 +1,103 @@
+# IBVAP border rules — demo BOP (fictional geometry).
+#
+# Coordinates are normalised to the camera frame: x and y from 0 to 1,
+# origin at the top-left. This is the same space as Frigate's path_data,
+# so values do not depend on the detect resolution.
+#
+# Every change to this file changes the rules version recorded on alerts
+# (and, from Phase 5, anchored on the ledger).
+
+night:
+  start: "18:30"
+  end: "06:00"
+  timezone: Asia/Kolkata
+
+track_ttl_s: 120
+
+cameras:
+  # Fence-line camera looking along the border fence.
+  cam-fence-east:
+    zones:
+      fence_strip:          # 10 m strip on the Indian side of the fence
+        polygon: [[0.0, 0.45], [1.0, 0.45], [1.0, 0.70], [0.0, 0.70]]
+      no_go_area:           # restricted area beyond the fence
+        polygon: [[0.0, 0.0], [1.0, 0.0], [1.0, 0.40], [0.0, 0.40]]
+    tripwires:
+      border_fence:
+        points: [[0.0, 0.42], [1.0, 0.42]]
+        inbound_point: [0.5, 0.9]          # bottom of frame = Indian side
+    rules:
+      - id: fence-crossing-inbound
+        type: tripwire
+        tripwire: border_fence
+        direction: inbound
+        objects: [person, car, motorcycle, truck]
+        min_confidence: 0.6
+        night_min_confidence: 0.45
+        severity: high
+        night_severity: critical
+        cooldown_s: 30
+      - id: fence-crossing-outbound
+        type: tripwire
+        tripwire: border_fence
+        direction: outbound
+        objects: [person, car, motorcycle, truck]
+        severity: medium
+        night_severity: high
+        cooldown_s: 30
+      - id: fence-strip-night-movement
+        type: night_movement
+        zone: fence_strip
+        objects: [person, car, motorcycle, truck]
+        min_confidence: 0.45
+        severity: high
+        cooldown_s: 120
+      - id: fence-strip-loitering
+        type: loitering
+        zone: fence_strip
+        dwell_s: 45
+        severity: medium
+        night_severity: high
+        cooldown_s: 300
+      - id: fence-approach-retreat
+        type: approach_retreat
+        zone: fence_strip
+        min_entries: 3
+        window_s: 180
+        severity: medium
+        cooldown_s: 300
+      - id: fence-group-forming
+        type: group_forming
+        zone: fence_strip
+        min_count: 3
+        severity: high
+        cooldown_s: 300
+
+  # Camera on the BOP approach road.
+  cam-bop-road:
+    zones:
+      bop_road:
+        polygon: [[0.30, 0.35], [0.70, 0.35], [0.95, 1.0], [0.05, 1.0]]
+      checkpost_restricted:
+        polygon: [[0.40, 0.10], [0.60, 0.10], [0.60, 0.30], [0.40, 0.30]]
+    rules:
+      - id: road-vehicle-stopped
+        type: vehicle_stopped
+        zone: bop_road
+        dwell_s: 30
+        severity: high
+        cooldown_s: 300
+      - id: road-wrong-direction
+        type: wrong_direction
+        zone: bop_road
+        allowed_direction: [0.0, -1.0]     # traffic should move up the frame, towards the post
+        objects: [car, motorcycle, bus, truck]
+        severity: medium
+        cooldown_s: 120
+      - id: checkpost-restricted-entry
+        type: zone_entry
+        zone: checkpost_restricted
+        objects: [person, car, motorcycle, truck]
+        severity: high
+        night_severity: critical
+        cooldown_s: 60

@@ -4,11 +4,19 @@ version = "0.1.0"
 description = "IBVAP backend: rules engine, Jev triage, evidence hashing, sync queue, REST/WebSocket API"
 requires-python = ">=3.12"
 dependencies = [
+    "aiomqtt>=2.5.1",
+    "fastapi>=0.143.0",
     "pydantic>=2.7,<3",
+    "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "sqlalchemy>=2",
+    "tzdata>=2026.5",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=8",
     "ruff>=0.6",
 ]

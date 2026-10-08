@@ -21,7 +21,7 @@ Zone references (A/B/C, Trust Layer) follow the architecture in `CLAUDE.md` §3.
 ## Phase 1 — Ingestion & detection (week 1)
 **Zone:** B — stream gateway + inference
 
-- Docker Compose: Frigate (official image) + Mosquitto + local RTSP server (MediaMTX, MIT — pending team approval) looping test videos.
+- Docker Compose: Frigate (official image) + Mosquitto + local RTSP server (MediaMTX, MIT — approved) looping test videos.
 - 2–3 test streams: day, night and road/vehicle clips from `samples/`, plus one phone IP-camera stream.
 - Frigate config: person, car, motorcycle, bus, truck; basic zones; recordings and snapshots on.
 
@@ -30,7 +30,7 @@ Zone references (A/B/C, Trust Layer) follow the architecture in `CLAUDE.md` §3.
 ## Phase 2 — ibvap-core foundation (weeks 1–2)
 **Zone:** B — event intelligence base
 
-- FastAPI service; MQTT consumer for `frigate/events` (and `frigate/reviews`) → IBVAP events.
+- FastAPI service; MQTT consumer for `frigate/events` → IBVAP events (`frigate/reviews` deferred until a rule needs it).
 - Storage via SQLAlchemy: SQLite at the edge, PostgreSQL at the centre, same models.
 - Alert lifecycle state machine: Generated → Delivered → Acknowledged → Verified/Rejected → Escalated/Closed; every transition written to an audit table.
 - REST: `/events`, `/alerts/{id}/ack|verify|reject|escalate`, `/cameras`. WebSocket: `/ws/alerts`.
@@ -43,7 +43,7 @@ Zone references (A/B/C, Trust Layer) follow the architecture in `CLAUDE.md` §3.
 
 - Per-camera YAML rules: object type, zone, schedule, min confidence, dwell time, direction, severity, cooldown.
 - Rules:
-  1. Virtual fence / directional tripwire (line crossing with direction vector; own geometry or `supervision`, MIT)
+  1. Virtual fence / directional tripwire (line crossing with direction; own geometry, no extra dependency)
   2. Restricted zone entry
   3. Night-time movement (fixed window or sunrise/sunset), higher sensitivity
   4. Loitering (dwell time in zone)
@@ -149,7 +149,6 @@ Zone references (A/B/C, Trust Layer) follow the architecture in `CLAUDE.md` §3.
 ## Open decisions
 
 - Finale / submission date and team size (to convert weeks to dates).
-- Add MediaMTX (MIT) for test RTSP streams?
 - Fabric chaincode language: Go or TypeScript?
 
 ## Status
@@ -157,4 +156,7 @@ Zone references (A/B/C, Trust Layer) follow the architecture in `CLAUDE.md` §3.
 | Phase | Status |
 |---|---|
 | 0 — Foundations | Done |
-| 1–10 | Not started |
+| 1 — Ingestion & detection | Waiting on test footage + GPU info (MediaMTX approved) |
+| 2 — ibvap-core foundation | Done — verified against a real Mosquitto broker with Frigate-shaped sample events; not yet against live Frigate |
+| 3 — Rules engine | Done — all 8 rules unit-tested with synthetic tracks; verified over real MQTT with sample events, not yet on live video |
+| 4–10 | Not started |

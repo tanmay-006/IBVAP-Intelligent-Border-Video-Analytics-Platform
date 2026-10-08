@@ -6,9 +6,20 @@ Every third-party component used by IBVAP is listed here. Add a row before intro
 |---|---|---|---|
 | Frigate | Camera ingestion, detection, face/LPR enrichments, recording | MIT | Official Docker image; config only, no source copied |
 | Pydantic | Event schema and validation (ibvap-core) | MIT | Python dependency |
+| FastAPI | REST + WebSocket API (ibvap-core) | MIT | Python dependency |
+| Uvicorn (+ standard extras: uvloop, httptools, websockets, watchfiles, python-dotenv) | ASGI server | BSD-3-Clause (extras: MIT / Apache-2.0 / BSD) | Python dependency |
+| SQLAlchemy | Event storage (SQLite edge / PostgreSQL centre) | MIT | Python dependency |
+| aiomqtt | Async MQTT client for Frigate events | BSD-3-Clause | Python dependency |
+| paho-mqtt | MQTT protocol (via aiomqtt) | EPL-2.0 / EDL-1.0 (dual) | Transitive dependency, used under EDL-1.0 |
+| pydantic-settings | Environment configuration | MIT | Python dependency |
+| PyYAML | Rules configuration files | MIT | Python dependency |
+| tzdata | IANA time zones for the night window (slim containers) | Apache-2.0 | Python dependency |
+| Eclipse Mosquitto | MQTT broker | EPL-2.0 / EDL-1.0 (dual) | Official Docker image `eclipse-mosquitto` |
+| MediaMTX | RTSP server for looped test footage (development only) | MIT | Approved; added in Phase 1 |
 | pytest | Tests (dev only) | MIT | Dev dependency |
+| HTTPX | API test client (dev only) | BSD-3-Clause | Dev dependency |
 | Ruff | Linting (dev only) | MIT | Dev dependency |
 
-Planned (added when the relevant phase lands): Eclipse Mosquitto (EPL-2.0/EDL-1.0), FastAPI (MIT), SQLAlchemy (MIT), Roboflow supervision (MIT), Hyperledger Fabric (Apache-2.0), React (MIT), MapLibre GL JS (BSD-3-Clause), MediaMTX (MIT, pending approval). Jev / TypeSafe AI is a commercial API, used under its terms of service.
+Planned (added when the relevant phase lands): Roboflow supervision (MIT), Hyperledger Fabric (Apache-2.0), React (MIT), MapLibre GL JS (BSD-3-Clause). Jev / TypeSafe AI is a commercial API, used under its terms of service.
 
 Ultralytics YOLO packages are AGPL-3.0 and are not used.

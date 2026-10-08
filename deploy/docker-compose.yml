@@ -1,0 +1,34 @@
+# Edge stack (Zone B). Phase 2: MQTT broker + ibvap-core.
+# Phase 1 adds Frigate and MediaMTX test streams to this file.
+name: ibvap-edge
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+
+  ibvap-core:
+    build: ../ibvap-core
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MQTT_HOST: mosquitto
+      IBVAP_DATABASE_URL: sqlite:////app/data/ibvap.db
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ibvap-data:/app/data
+      - ../ibvap-core/config:/app/config:ro
+    depends_on:
+      - mosquitto
+
+volumes:
+  mosquitto-data:
+  ibvap-data:
