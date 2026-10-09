@@ -129,7 +129,8 @@ def test_cameras_merge_site_config_with_seen(settings, tmp_path):
     from ibvap_core.api import create_app
 
     (tmp_path / "site.yaml").write_text(
-        "site: {name: Test BOP}\ncameras:\n  cam-a: {name: Gate A, lat: 27.0, lon: 84.9}\n"
+        "site: {name: Test BOP}\n"
+        "cameras:\n  cam-a: {name: Gate A, lat: 27.0, lon: 84.9, live_stream: gate a}\n"
     )
     settings = settings.model_copy(update={"site_path": str(tmp_path / "site.yaml")})
     with TestClient(create_app(settings)) as client:
@@ -141,6 +142,8 @@ def test_cameras_merge_site_config_with_seen(settings, tmp_path):
             ("cam-b", "cam-b", None),
         ]
         assert cams[0]["last_event_at"] is None and cams[1]["last_event_at"]
+        assert cams[0]["live_url"] == "http://127.0.0.1:1984/stream.html?src=gate%20a&mode=webrtc,mse"
+        assert cams[1]["live_url"] is None
 
 
 def test_media_proxy(client):

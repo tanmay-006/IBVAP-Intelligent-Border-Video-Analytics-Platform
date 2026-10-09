@@ -14,3 +14,4 @@ cameras:
     name: Gate west (laptop webcam)
     lat: 26.9912
     lon: 84.8478
+    live_stream: cam-gate-west     # go2rtc stream in frigate/config.yml

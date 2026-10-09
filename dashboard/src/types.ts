@@ -67,6 +67,7 @@ export interface Camera {
   name: string;
   lat: number | null;
   lon: number | null;
+  live_url: string | null;
   last_event_at: string | null;
 }
 

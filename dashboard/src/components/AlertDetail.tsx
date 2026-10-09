@@ -56,7 +56,7 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [snapshotFailed, setSnapshotFailed] = useState(false);
-  const [showClip, setShowClip] = useState(false);
+  const [media, setMedia] = useState<"snapshot" | "clip">("snapshot");
 
   const id = event?.event_id;
   const status = event?.status;
@@ -64,7 +64,7 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
     setNote("");
     setError(null);
     setSnapshotFailed(false);
-    setShowClip(false);
+    setMedia("snapshot");
   }, [id]);
   useEffect(() => {
     if (!id) return;
@@ -73,8 +73,8 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
 
   if (!event) {
     return (
-      <section className="detail empty-detail" aria-label="Alert detail">
-        <p>Select an alert to see the evidence, why it fired, and what to do next.</p>
+      <section className="detail detail-empty" aria-label="Alert detail">
+        <p>Select an alert to see its evidence, why it fired, and what to do next.</p>
       </section>
     );
   }
@@ -114,7 +114,7 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
   if (event.detection_confidence !== null)
     rows.push(["Detection confidence", `${Math.round(event.detection_confidence * 100)}%`]);
   if (event.direction) rows.push(["Direction", humanize(event.direction)]);
-  if (event.zone_id) rows.push(["Zone", event.zone_id.replace(/_/g, " ")]);
+  if (event.zone_id) rows.push(["Zone", readable(event.zone_id)]);
   if (event.plate_text)
     rows.push([
       "Number plate",
@@ -132,7 +132,7 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
     rows.push([
       "Rule",
       <>
-        {event.versions.rule_id} <small>(rules version {event.versions.rule_version})</small>
+        {event.versions.rule_id} <small>version {event.versions.rule_version}</small>
       </>,
     ]);
   rows.push(["Decided by", decisionText(event)]);
@@ -141,73 +141,129 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
 
   return (
     <section className={`detail sev-${event.severity}`} aria-label="Alert detail">
-      <header className="detail-head">
-        <span className="sev-badge">{SEVERITY_LABEL[event.severity]}</span>
-        <h2>{EVENT_LABEL[event.event_type]}</h2>
-        <p className="detail-where">
-          {camera?.name ?? event.camera_id} at {formatIstDateTime(event.timestamp)}
-        </p>
-        <p className="detail-status">Status: {STATUS_LABEL[event.status]}</p>
-      </header>
-
-      <div className="evidence">
-        {event.snapshot_ref && !snapshotFailed ? (
-          <img
-            src={mediaUrl(event.event_id, "snapshot")}
-            alt={`Snapshot of ${event.object_type ?? "object"} on ${camera?.name ?? event.camera_id}`}
-            onError={() => setSnapshotFailed(true)}
-          />
-        ) : (
-          <div className="no-media">
-            {event.snapshot_ref
-              ? "Snapshot could not be loaded. Check that Frigate is running at the BOP."
-              : "No snapshot was recorded for this event."}
+      <div className="detail-scroll">
+        <header className="detail-head">
+          <div className="detail-title">
+            <span className="sev-badge">{SEVERITY_LABEL[event.severity]}</span>
+            <h2>{EVENT_LABEL[event.event_type]}</h2>
           </div>
-        )}
-        {event.clip_ref &&
-          (showClip ? (
-            <video src={mediaUrl(event.event_id, "clip")} controls autoPlay />
-          ) : (
-            <button className="secondary" onClick={() => setShowClip(true)}>
-              Play clip
-            </button>
-          ))}
-      </div>
-
-      <div className="why">
-        <h3>Why this alert fired</h3>
-        <p className="why-summary">{event.explanation ? readable(event.explanation.summary) : "No explanation recorded."}</p>
-        <dl>
-          {rows.map(([label, value]) => (
-            <div key={label} className="dl-row">
-              <dt>{label}</dt>
-              <dd>{value}</dd>
+          <dl className="detail-facts">
+            <div>
+              <dt>Camera</dt>
+              <dd>{camera?.name ?? event.camera_id}</dd>
             </div>
-          ))}
-        </dl>
+            <div>
+              <dt>Time</dt>
+              <dd>{formatIstDateTime(event.timestamp)}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{STATUS_LABEL[event.status]}</dd>
+            </div>
+          </dl>
+        </header>
+
+        <section className="card evidence" aria-label="Evidence">
+          <div className="card-head">
+            <h3>Evidence</h3>
+            <div className="segmented" role="tablist" aria-label="Evidence type">
+              <button role="tab" aria-selected={media === "snapshot"} onClick={() => setMedia("snapshot")}>
+                Snapshot
+              </button>
+              <button
+                role="tab"
+                aria-selected={media === "clip"}
+                disabled={!event.clip_ref}
+                onClick={() => setMedia("clip")}
+                title={event.clip_ref ? undefined : "No clip recorded for this event yet"}
+              >
+                Clip
+              </button>
+            </div>
+          </div>
+          <div
+            className={`video-frame${(media === "clip" && event.clip_ref) || (event.snapshot_ref && !snapshotFailed) ? "" : " no-media"}`}
+          >
+            {media === "clip" && event.clip_ref ? (
+              <video key={event.event_id} src={mediaUrl(event.event_id, "clip")} controls autoPlay />
+            ) : event.snapshot_ref && !snapshotFailed ? (
+              <img
+                src={mediaUrl(event.event_id, "snapshot")}
+                alt={`Snapshot of ${event.object_type ?? "object"} on ${camera?.name ?? event.camera_id}`}
+                onError={() => setSnapshotFailed(true)}
+              />
+            ) : (
+              <p className="media-empty">
+                {event.snapshot_ref
+                  ? "Snapshot could not be loaded. Check that Frigate is running at the BOP."
+                  : "No snapshot was recorded for this event."}
+              </p>
+            )}
+          </div>
+        </section>
+
+        <div className="detail-columns">
+          <section className="card why" aria-label="Why this alert fired">
+            <div className="card-head">
+              <h3>Why this alert fired</h3>
+            </div>
+            <p className="why-summary">
+              {event.explanation ? readable(event.explanation.summary) : "No explanation recorded."}
+            </p>
+            <dl className="facts">
+              {rows.map(([label, value]) => (
+                <div key={label} className="fact">
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          <section className="card history" aria-label="History">
+            <div className="card-head">
+              <h3>History</h3>
+            </div>
+            {audit.length === 0 ? (
+              <p className="muted">No actions yet.</p>
+            ) : (
+              <ol className="timeline">
+                {audit.map((a, i) => (
+                  <li key={i}>
+                    <span className="timeline-what">
+                      {STATUS_LABEL[a.to_status] === STATUS_LABEL[a.from_status]
+                        ? "Shown on console"
+                        : STATUS_LABEL[a.to_status]}{" "}
+                      by {a.actor === "system:ws" || a.actor === "system" ? "system" : a.actor}
+                    </span>
+                    <time dateTime={a.at}>{formatIstDateTime(a.at)}</time>
+                    {a.note && <q>{a.note}</q>}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </div>
       </div>
 
-      <div className="act">
-        <h3>Your decision</h3>
+      <footer className="decision" aria-label="Your decision">
         {actions.length === 0 ? (
           <p className="muted">This alert is closed. No further action is possible.</p>
         ) : (
           <>
-            <div className="act-fields">
-              <label>
-                Your name or service number
-                <input value={operator} onChange={(e) => saveOperator(e.target.value)} autoComplete="name" />
-              </label>
-              <label>
-                Note (optional)
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
-              </label>
-            </div>
-            <div className="act-buttons">
+            <label className="field operator">
+              <span>Your name or service number</span>
+              <input value={operator} onChange={(e) => saveOperator(e.target.value)} autoComplete="name" />
+            </label>
+            <label className="field note">
+              <span>Note (optional)</span>
+              <input value={note} onChange={(e) => setNote(e.target.value)} />
+            </label>
+            <div className="decision-buttons">
               {actions.map((a) => (
                 <button
                   key={a}
-                  className={a === "reject" || a === "close" ? "secondary" : "primary"}
+                  className={a === "reject" || a === "close" ? "button secondary" : "button primary"}
                   disabled={busy !== null}
                   onClick={() => act(a)}
                 >
@@ -222,29 +278,7 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
             {error}
           </p>
         )}
-      </div>
-
-      <div className="audit">
-        <h3>History</h3>
-        {audit.length === 0 ? (
-          <p className="muted">No actions yet.</p>
-        ) : (
-          <ol>
-            {audit.map((a, i) => (
-              <li key={i}>
-                <time dateTime={a.at}>{formatIstDateTime(a.at)}</time>
-                <span>
-                  {STATUS_LABEL[a.to_status] === STATUS_LABEL[a.from_status]
-                    ? "Shown on console"
-                    : STATUS_LABEL[a.to_status]}{" "}
-                  by {a.actor === "system:ws" || a.actor === "system" ? "system" : a.actor}
-                </span>
-                {a.note && <q>{a.note}</q>}
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
+      </footer>
     </section>
   );
 }

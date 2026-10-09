@@ -12,7 +12,7 @@ docker compose -f deploy/docker-compose.yml down                   # stop (data 
 |---|---|---|
 | mosquitto | 1883 | MQTT broker: Frigate publishes events, ibvap-core subscribes |
 | mediamtx | 8554 | Publishes the webcam (and optional looped test clips) as RTSP camera streams |
-| frigate | 5000 (internal API), 8971 (UI) | Detection, tracking, snapshots and clips |
+| frigate | 5000 (internal API), 8971 (UI), 1984 + 8555 (live view: go2rtc, WebRTC) | Detection, tracking, snapshots, clips and the dashboard's live view |
 | ibvap-core (profile `core`) | 8000 | Rules, alerts, API and dashboard |
 
 Optional overrides go in `deploy/.env` (copy from `.env.example`; git-ignored). Images are pinned: Frigate 0.18.0 by digest, MediaMTX 1.21.2, Mosquitto 2.0.20.
@@ -41,6 +41,13 @@ docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 ```
 
 The runtime output must include `nvidia`, and the CUDA check must list the
-expected GPU. Do not enable GPU settings in Compose or switch Frigate
-detectors until both checks pass and a compatible Frigate GPU detector image
-and model have been selected.
+expected GPU. Then start the stack with the GPU override, which gives Frigate the GPU
+for hardware video decoding (NVDEC):
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.gpu.yml up -d
+```
+
+[`docker-compose.gpu.yml`](docker-compose.gpu.yml) only adds the GPU reservation;
+Frigate picks NVDEC by itself. Object detection stays on the CPU (see
+[frigate/README.md](../frigate/README.md#what-runs-on-the-gpu)).

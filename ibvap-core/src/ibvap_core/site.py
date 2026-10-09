@@ -14,6 +14,7 @@ class CameraInfo(BaseModel):
     name: str
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
+    live_stream: str | None = Field(None, description="go2rtc stream name for the dashboard's live view")
 
 
 class SiteInfo(BaseModel):

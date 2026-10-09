@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx
@@ -114,6 +115,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="IBVAP Core", version="0.1.0", lifespan=lifespan)
     site = load_site(settings.site_path)
 
+    def live_url(stream: str) -> str:
+        # WebRTC first for the lowest delay, MSE as fallback.
+        return f"{settings.live_view_url.rstrip('/')}/stream.html?src={quote(stream)}&mode=webrtc,mse"
+
     dashboard = Path(settings.dashboard_dir)
     has_dashboard = (dashboard / "index.html").exists()
     if has_dashboard:
@@ -212,6 +217,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "name": info.name if info else camera_id,
                     "lat": info.lat if info else None,
                     "lon": info.lon if info else None,
+                    "live_url": live_url(info.live_stream) if info and info.live_stream else None,
                     "last_event_at": seen.get(camera_id, {}).get("last_event_at"),
                 }
             )

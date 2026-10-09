@@ -5,13 +5,15 @@ import { AlertDetail } from "./components/AlertDetail";
 import { AlertQueue } from "./components/AlertQueue";
 import { CameraMap } from "./components/CameraMap";
 import { Header } from "./components/Header";
-import { LiveCamera } from "./components/LiveCamera";
+import { LiveView } from "./components/LiveView";
 import { SearchView } from "./components/SearchView";
+import { useTheme } from "./theme";
 import type { Camera, Health, IbvapEvent } from "./types";
 import { useAlertStream } from "./useAlertStream";
 
 export function App() {
   const { events, status, fresh, merge } = useAlertStream();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [health, setHealth] = useState<Health | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -73,10 +75,24 @@ export function App() {
   };
 
   const selected = selectedId ? events[selectedId] ?? null : null;
+  // Live view follows the camera filter, else the selected alert's camera, else the first live camera.
+  const liveCamera =
+    (cameraFilter && cameraById[cameraFilter]) ||
+    (selected && cameraById[selected.camera_id]) ||
+    cameras.find((c) => c.live_url) ||
+    undefined;
 
   return (
     <div className="app">
-      <Header health={health} stream={status} counts={counts} view={view} onView={setView} />
+      <Header
+        health={health}
+        stream={status}
+        counts={counts}
+        view={view}
+        onView={setView}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
       {view === "live" ? (
         <main className="live">
           <AlertQueue
@@ -98,14 +114,18 @@ export function App() {
             camera={selected ? cameraById[selected.camera_id] : undefined}
             onUpdated={(e) => merge([e])}
           />
-          <LiveCamera camera={selected ? cameraById[selected.camera_id] : cameras[0]} />
-          <CameraMap
-            cameras={cameras}
-            events={all}
-            selectedCamera={cameraFilter}
-            onSelectCamera={selectCamera}
-            now={now}
-          />
+          <aside className="side" aria-label="Cameras">
+            <LiveView camera={liveCamera} />
+            <CameraMap
+              cameras={cameras}
+              events={all}
+              focusCamera={liveCamera?.camera_id ?? null}
+              cameraFilter={cameraFilter}
+              onSelectCamera={selectCamera}
+              theme={theme}
+              now={now}
+            />
+          </aside>
         </main>
       ) : (
         <main className="search-view">

@@ -2,6 +2,7 @@
 #
 #   docker compose -f deploy/docker-compose.yml up -d              # broker, camera stream, Frigate
 #   docker compose -f deploy/docker-compose.yml --profile core up -d   # + ibvap-core in a container
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.gpu.yml up -d   # + NVIDIA GPU video decoding
 #
 # During development ibvap-core usually runs outside Docker (uv run uvicorn ...),
 # reaching the broker on 127.0.0.1:1883 and Frigate's API on 127.0.0.1:5000.
@@ -46,7 +47,9 @@ services:
     ports:
       - "127.0.0.1:5000:5000"   # internal API, used by ibvap-core (no auth; never expose beyond localhost)
       - "127.0.0.1:8971:8971"   # Frigate web UI (login required)
-      - "127.0.0.1:1984:1984"   # go2rtc live stream for the operator dashboard
+      - "127.0.0.1:1984:1984"   # go2rtc live view for the operator dashboard
+      - "127.0.0.1:8555:8555/tcp"   # go2rtc WebRTC (low-delay live view)
+      - "127.0.0.1:8555:8555/udp"
     depends_on:
       - mosquitto
       - mediamtx

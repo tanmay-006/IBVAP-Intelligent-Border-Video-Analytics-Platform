@@ -19,8 +19,10 @@ interface Props {
 export function AlertQueue(p: Props) {
   return (
     <section className="queue" aria-label="Alert queue">
-      <div className="pane-head">
-        <h2>Alert queue</h2>
+      <div className="queue-head">
+        <h2>
+          Alert queue <span className="count">{p.queue.length}</span>
+        </h2>
         <div className="filters">
           <label>
             <input type="checkbox" checked={p.showClosed} onChange={p.onToggleClosed} /> Closed
@@ -29,12 +31,12 @@ export function AlertQueue(p: Props) {
             <input type="checkbox" checked={p.showDetections} onChange={p.onToggleDetections} /> Raw detections
           </label>
         </div>
+        {p.cameraFilter && (
+          <button className="chip" onClick={p.onClearCamera}>
+            Only {p.cameras[p.cameraFilter]?.name ?? p.cameraFilter}. Show all cameras
+          </button>
+        )}
       </div>
-      {p.cameraFilter && (
-        <button className="chip" onClick={p.onClearCamera}>
-          Only {p.cameras[p.cameraFilter]?.name ?? p.cameraFilter}. Show all cameras
-        </button>
-      )}
 
       {p.queue.length === 0 ? (
         <p className="empty">

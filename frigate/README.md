@@ -48,14 +48,29 @@ sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
 
-Verify that Docker can access the GPU before changing the Frigate detector:
+Verify that Docker can access the GPU:
 
 ```bash
 docker info --format '{{json .Runtimes}}'
 docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 ```
 
-The Docker runtimes output must include `nvidia`, and the CUDA test must list the RTX 3050. The toolkit alone does not make Frigate use the GPU. GPU detection also requires a compatible Frigate TensorRT/ONNX image and model, plus a matching detector entry in [`config.yml`](config.yml). Until those are installed and validated, this project intentionally keeps the tested OpenVINO CPU detector:
+The Docker runtimes output must include `nvidia`, and the CUDA test must list the RTX 3050.
+
+### What runs on the GPU
+
+**Video decoding (enabled).** Start the stack with the GPU override:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.gpu.yml up -d
+```
+
+Frigate's default `hwaccel_args: auto` then detects the GPU and decodes the camera video with NVDEC. We checked this on 9 Oct 2026:
+- Frigate logged `Automatically detected nvidia hwaccel for video decoding`.
+- `nvidia-smi` listed Frigate's `ffmpeg` on the RTX 3050, with the decoder at about 3%.
+- Without the override, the same config decodes on the CPU, so machines without an NVIDIA GPU need no changes.
+
+**Object detection (CPU, by choice).** GPU detection would need Frigate's `-tensorrt` image (about 5 GB to download, roughly 10 GB on disk) and an ONNX model. On this laptop the disk does not have room for it, and the CPU detector already takes 5–10 ms per frame. So the tested OpenVINO CPU detector stays:
 
 ```yaml
 detectors:

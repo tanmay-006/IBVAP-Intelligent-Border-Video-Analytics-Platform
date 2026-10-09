@@ -66,10 +66,10 @@ docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 ```
 
 The first command must include an `nvidia` runtime, and the second must list
-the expected GPU. Installing the toolkit does not automatically move Frigate
-inference to the GPU. A compatible Frigate GPU image/model and detector
-configuration are still required; the tested default remains the OpenVINO CPU
-detector.
+your GPU. Then start the stack with the GPU override (section 4, Step 1), and
+Frigate decodes the camera video on the GPU (NVDEC). Object detection stays on
+the CPU (OpenVINO, about 5–10 ms per frame), which is well within budget; GPU
+detection would need Frigate's much larger `-tensorrt` image.
 
 ---
 
@@ -135,6 +135,14 @@ docker compose -f deploy/docker-compose.yml up -d
 docker compose -f deploy/docker-compose.yml ps
 ```
 
+**With an NVIDIA GPU** (and the NVIDIA Container Toolkit set up), start it with the GPU override instead, so Frigate decodes video on the GPU:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.gpu.yml up -d
+```
+
+To confirm the GPU is in use, run `nvidia-smi`; it should list Frigate's `ffmpeg` process. `GPU-Util` can still read 0–5%, because video decoding runs on the GPU's separate decoder, not its compute cores.
+
 All three services (`mosquitto`, `mediamtx`, `frigate`) should show **running**. Frigate takes about 30 seconds before it reports `(healthy)`.
 
 ### Step 2: start ibvap-core
@@ -159,7 +167,11 @@ ibvap-core finds its config, database and dashboard relative to its own folder, 
 
 http://127.0.0.1:8000/ui/
 
-The header should show **Live** and **Camera feed connected**.
+The header should show **Console live** and **Camera feed connected**.
+
+- **Layout:** the alert queue on the left; the selected alert in the middle (evidence, why it fired, history); live view, map and cameras on the right. Your decision (acknowledge, verify, reject, escalate) is always at the bottom of the middle column.
+- **Live view:** follows the selected alert's camera. Click a camera in the list to watch it and filter the queue. Only cameras with a `live_stream` in `ibvap-core/config/site.yaml` have one; on this laptop that's the webcam, `cam-gate-west`.
+- **Light or dark:** the console follows your system theme. Switch it with the sun/moon button at the top right; the choice is remembered.
 
 ---
 
@@ -272,6 +284,9 @@ cd dashboard && npm test && cd ..
 | Frigate keeps restarting / `no space left on device` | Disk full | `df -h /`; free space, or `docker system prune` to remove unused images |
 | Frigate UI password lost | — | `docker compose -f deploy/docker-compose.yml logs frigate \| grep Password` (first start only), or reset it from the Frigate UI as another admin |
 | Map shows markers but no background | No internet (OpenStreetMap tiles) | Expected offline; markers and alerts still work |
+| Live view stays black or says the stream is offline | Frigate not running, or the webcam is busy in another app | `docker compose -f deploy/docker-compose.yml ps`; close other apps using the webcam |
+| Live view lags by a few seconds | Browser fell back from WebRTC to MSE | Use the dashboard on the same machine as the stack (WebRTC is set up for 127.0.0.1), and reload the page |
+| `could not select device driver "nvidia"` | GPU override used without the NVIDIA Container Toolkit | Install the toolkit (section 1), or start without `-f deploy/docker-compose.gpu.yml` |
 
 **Logs:**
 

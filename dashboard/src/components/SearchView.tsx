@@ -41,6 +41,7 @@ export function SearchView({ cameras, onOpen }: Props) {
 
   return (
     <section className="search" aria-label="Search events">
+      <h2 className="page-title">Search events</h2>
       <form onSubmit={search} className="search-form">
         <label>
           Camera
@@ -87,7 +88,7 @@ export function SearchView({ cameras, onOpen }: Props) {
           To
           <input type="datetime-local" value={form.until} onChange={set("until")} />
         </label>
-        <button className="primary" type="submit" disabled={loading}>
+        <button className="button primary" type="submit" disabled={loading}>
           {loading ? "Searching…" : "Search"}
         </button>
       </form>

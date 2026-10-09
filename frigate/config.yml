@@ -9,14 +9,23 @@ mqtt:
   topic_prefix: frigate     # ibvap-core subscribes to frigate/events
   client_id: frigate
 
-# Expose the webcam through go2rtc for the operator dashboard's live view.
+# Live view for the operator dashboard, served by Frigate's built-in go2rtc.
+# WebRTC gives the lowest delay (the browser falls back to MSE if WebRTC fails).
+# Stream names must match `live_stream` in ibvap-core/config/site.yaml.
 go2rtc:
   streams:
     cam-gate-west:
       - rtsp://mediamtx:8554/webcam
+  webrtc:
+    candidates:
+      - 127.0.0.1:8555
+
+# Video decoding: Frigate's default `hwaccel_args: auto` uses the NVIDIA GPU (NVDEC)
+# when the container can see one (deploy/docker-compose.gpu.yml), otherwise the CPU.
 
 # Object detection on the CPU with OpenVINO and the SSDLite MobileNet v2 model
-# bundled in the Frigate image (COCO classes). GPU acceleration is a later option.
+# bundled in the Frigate image (COCO classes). About 10 ms per frame on a laptop CPU.
+# GPU detection needs Frigate's much larger -tensorrt image and an ONNX model (see frigate/README.md).
 detectors:
   ov:
     type: openvino

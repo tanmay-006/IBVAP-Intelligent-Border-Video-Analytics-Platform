@@ -24,6 +24,10 @@ dashboard/dist/
 
 # Runtime data (recordings, databases, evidence, ledger state)
 deploy/data/
+ibvap-core/data/
+*.db-wal
+*.db-shm
+*.db-journal
 *.db
 *.sqlite3
 evidence/

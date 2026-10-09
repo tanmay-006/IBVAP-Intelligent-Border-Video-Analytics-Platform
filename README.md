@@ -78,29 +78,39 @@ Green = built and tested · amber = next · grey = planned.
 
 ## Operator dashboard
 
-Real screenshots of our dashboard (`dashboard/`), captured on **9 Oct 2026 at 18:58 IST** against ibvap-core with the sample events from our replay script. The operator name and plate are fictional.
+Real screenshots of our dashboard (`dashboard/`), captured on **9 Oct 2026 at 22:42 IST** against ibvap-core with the sample events from our replay script. The console follows the operator's system theme, and a button switches between light and dark. Plates and sites are fictional.
 
-![IBVAP operator console: alert queue ranked by severity, a critical fence-crossing alert with its explanation, actions and history, and the camera map](docs/images/dashboard-desktop.png)
+![IBVAP operator console, light theme: alert queue ranked by severity, a critical fence-crossing alert with evidence, explanation and history, and live view, map and cameras on the right](docs/images/dashboard-light.png)
 
-What the screenshot shows:
+<details>
+<summary>Dark theme</summary>
 
-- **Alert queue (left):** ranked by severity. The critical fence crossing is at the top. The **Vehicle stopped** alert was raised on its own by the rules timer after the sample car stood still for 31 s (limit 30 s). A dot marks alerts nobody has acknowledged yet.
-- **Alert detail (centre):**
+![The same console in the dark theme](docs/images/dashboard-dark.png)
+
+</details>
+
+How the screen is organised:
+
+- **Alert queue (left):** ranked by severity, then newest first. The **Vehicle stopped** alert was raised on its own by the rules timer, after the sample car stood still for 31 s (limit 30 s). A dot marks alerts nobody has acknowledged yet.
+- **Selected alert (centre):**
+  - **Evidence:** a Snapshot / Clip switch.
   - **Why this alert fired:** direction, night flag, thresholds, rule and rules version, and who decided ("Border rule only", because Jev is not connected yet).
-  - **Actions:** the operator has acknowledged it, so the next actions offered are **Verify** or **Reject as false alarm**.
   - **History:** every action, with the operator's name and note.
-- **Camera map (right):** each camera is coloured by its most severe open alert; clicking a camera filters the queue.
-- **Header:** live connection, camera-feed status and IST clock.
+  - **Your decision:** stays pinned at the bottom, and offers only the valid next step (Acknowledge → Verify or Reject → Escalate or Close).
+- **Right column:**
+  - **Live view:** the camera in focus, streamed from Frigate's go2rtc over WebRTC.
+  - **Map:** each camera coloured by its most severe open alert.
+  - **Camera list:** clicking a camera filters the queue and switches the live view.
+- **Header:** open critical and high alerts, how many await acknowledgement, connection and camera-feed status, and the IST clock.
 
-What is not shown yet, and why:
-
-- The snapshot area says *"Snapshot could not be loaded"* because Frigate is not running yet (Phase 1). The console proxies snapshots and clips from Frigate through ibvap-core, and this path is covered by automated tests.
-- The map's OpenStreetMap background did not load in this headless-browser capture. The camera markers show anyway, which is also how the map behaves offline at a BOP.
+What the screenshots do not show, and why:
+- **No snapshot or live picture:** the replayed sample events have no camera media, and the demo cameras `cam-fence-east` / `cam-bop-road` have no live stream. With Frigate running, the webcam camera shows its real snapshot, clip and live view (see [Live camera](#6-live-camera-frigate)). We don't publish webcam images.
+- **No map background:** the OpenStreetMap tiles did not load in the headless-browser capture. The markers show anyway, which is how the map behaves offline at a BOP.
 
 <details>
 <summary>Phone / narrow-screen layout</summary>
 
-<img src="docs/images/dashboard-mobile.png" alt="The same console on a phone-width screen, with queue, detail and map stacked" width="360">
+<img src="docs/images/dashboard-mobile.png" alt="The console on a phone-width screen in the dark theme, with queue, alert, decision and cameras stacked" width="360">
 
 </details>
 
@@ -276,7 +286,9 @@ Checked on **9 Oct 2026, 19:41–19:45 IST** with the full edge stack running in
 |---|---|
 | Frigate version | 0.18.0, official image, pinned by digest |
 | Object detector | OpenVINO, SSDLite MobileNet v2, on the laptop CPU (AMD Ryzen 5 7535HS) |
-| Detector inference time | **10 ms per frame** (Frigate `/api/stats`) |
+| Detector inference time | **10 ms per frame** on CPU decoding; **5.6 ms** once video decoding moved to the GPU (Frigate `/api/stats`) |
+| Video decoding | On the NVIDIA RTX 3050 (NVDEC), detected automatically by Frigate; `nvidia-smi` lists Frigate's ffmpeg on the GPU (re-checked 9 Oct 2026, 22:45 IST) |
+| Live view | Frigate's go2rtc serves the webcam to the dashboard over WebRTC, falling back to MSE |
 | Camera stream | 1280×720 from MediaMTX over RTSP; Frigate processing at 5 fps |
 | Snapshot and clip from Frigate for a live-camera event | 200 OK, JPEG 63 KB and MP4 7.6 MB |
 | Same snapshot and clip served to the dashboard through ibvap-core (`/media/{alert}/…`) | 200 OK, `image/jpeg` and `video/mp4` |

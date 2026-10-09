@@ -1,0 +1,19 @@
+# Optional: give Frigate the NVIDIA GPU for hardware video decoding (NVDEC).
+# Needs the NVIDIA driver and the NVIDIA Container Toolkit on the host (see frigate/README.md).
+#
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.gpu.yml up -d
+#
+# Frigate's default `hwaccel_args: auto` then picks NVDEC by itself; `nvidia-smi`
+# shows Frigate's ffmpeg processes on the GPU. Object detection stays on the CPU
+# (OpenVINO) unless the -tensorrt image and an ONNX model are configured.
+services:
+  frigate:
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
