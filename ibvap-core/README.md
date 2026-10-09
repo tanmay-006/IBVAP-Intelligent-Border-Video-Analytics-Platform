@@ -55,7 +55,9 @@ The rules engine is deterministic and never calls Jev or the network.
 | GET | `/events/{id}` | One event |
 | GET | `/events/{id}/audit` | Lifecycle audit trail |
 | POST | `/alerts/{id}/{ack\|verify\|reject\|escalate\|close}` | Lifecycle transition, body `{"actor": "...", "note": "..."}`; 409 if not allowed |
-| GET | `/cameras` | Cameras seen so far |
+| GET | `/cameras` | Cameras from `config/site.yaml` (name, map position) merged with cameras that have sent events |
+| GET | `/media/{id}/{snapshot\|clip}` | Streams the event's snapshot or clip from Frigate (502 if Frigate is unreachable) |
+| GET | `/ui/` | The operator dashboard, when `dashboard/dist` has been built |
 | GET | `/metrics/latency` | Frame → console latency p50/p95/max, split by stage |
 | WS | `/ws/alerts` | `snapshot` of open alerts on connect, then `event.created` / `event.updated` |
 

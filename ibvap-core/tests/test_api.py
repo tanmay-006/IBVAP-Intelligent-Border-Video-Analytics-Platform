@@ -121,3 +121,81 @@ def test_rules_alert_flows_through_pipeline(settings, tmp_path):
         client.portal.call(client.app.state.pipeline.handle_frigate_payload, json.dumps(msg))
         alert = client.get(f"/events/{alerts[0]['event_id']}").json()
         assert alert["clip_ref"].endswith("/clip.mp4")
+
+
+def test_cameras_merge_site_config_with_seen(settings, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from ibvap_core.api import create_app
+
+    (tmp_path / "site.yaml").write_text(
+        "site: {name: Test BOP}\ncameras:\n  cam-a: {name: Gate A, lat: 27.0, lon: 84.9}\n"
+    )
+    settings = settings.model_copy(update={"site_path": str(tmp_path / "site.yaml")})
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/health").json()["site_name"] == "Test BOP"
+        ingest(client, camera="cam-b")
+        cams = client.get("/cameras").json()
+        assert [(c["camera_id"], c["name"], c["lat"]) for c in cams] == [
+            ("cam-a", "Gate A", 27.0),
+            ("cam-b", "cam-b", None),
+        ]
+        assert cams[0]["last_event_at"] is None and cams[1]["last_event_at"]
+
+
+def test_media_proxy(client):
+    import httpx
+
+    requested = []
+
+    def frigate(request: httpx.Request) -> httpx.Response:
+        requested.append(str(request.url))
+        if request.url.path.endswith("snapshot.jpg"):
+            return httpx.Response(200, content=b"\xff\xd8jpeg", headers={"content-type": "image/jpeg"})
+        return httpx.Response(404)
+
+    client.app.state.http_transport = httpx.MockTransport(frigate)
+    ingest(client, frigate_id="obj-1", has_snapshot=True, has_clip=True)
+    eid = first_event_id(client)
+
+    snap = client.get(f"/media/{eid}/snapshot")
+    assert snap.status_code == 200
+    assert snap.content == b"\xff\xd8jpeg"
+    assert requested == ["http://frigate.test:5000/api/events/obj-1/snapshot.jpg"]
+    assert client.get(f"/media/{eid}/clip").status_code == 404  # Frigate has no clip
+
+
+def test_media_proxy_errors(client):
+    import httpx
+
+    ingest(client, frigate_id="obj-2", has_snapshot=False)
+    eid = first_event_id(client)
+    assert client.get(f"/media/{eid}/snapshot").status_code == 404  # never recorded
+
+    ingest(client, frigate_id="obj-3", has_snapshot=True)
+
+    def down(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    client.app.state.http_transport = httpx.MockTransport(down)
+    eid3 = [e for e in client.get("/events").json() if e["tracking_id"] == "obj-3"][0]["event_id"]
+    resp = client.get(f"/media/{eid3}/snapshot")
+    assert resp.status_code == 502
+    assert "not reachable" in resp.json()["detail"]
+
+
+def test_root_serves_dashboard_when_built(settings, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from ibvap_core.api import create_app
+
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/", follow_redirects=False).headers["location"] == "/docs"
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<title>IBVAP Operator Console</title>")
+    settings = settings.model_copy(update={"dashboard_dir": str(dist)})
+    with TestClient(create_app(settings)) as client:
+        assert client.get("/", follow_redirects=False).headers["location"] == "/ui/"
+        assert "Operator Console" in client.get("/ui/").text

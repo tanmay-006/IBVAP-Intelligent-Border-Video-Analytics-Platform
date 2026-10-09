@@ -15,8 +15,10 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ibvap_core.config import Settings, get_settings
@@ -25,6 +27,7 @@ from ibvap_core.mqtt_consumer import MqttConsumer
 from ibvap_core.pipeline import Broadcaster, EventPipeline, event_message
 from ibvap_core.rules import RulesEngine, load_rules
 from ibvap_core.schemas import AlertStatus, EventType, IBVAPEvent, Severity
+from ibvap_core.site import load_site
 from ibvap_core.store import EventFilter, EventNotFound, EventStore, InvalidTransition
 
 log = logging.getLogger(__name__)
@@ -96,6 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pipeline = EventPipeline(settings, store, Broadcaster(), _load_rules_engine(settings))
         app.state.pipeline = pipeline
         app.state.mqtt = None
+        app.state.http_transport = None  # tests inject a mock transport for Frigate
         tasks = [asyncio.create_task(pipeline.run_rule_timer())]
         if settings.mqtt_enabled:
             app.state.mqtt = MqttConsumer(settings, pipeline)
@@ -108,10 +112,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine.dispose()
 
     app = FastAPI(title="IBVAP Core", version="0.1.0", lifespan=lifespan)
+    site = load_site(settings.site_path)
+
+    dashboard = Path(settings.dashboard_dir)
+    has_dashboard = (dashboard / "index.html").exists()
+    if has_dashboard:
+        app.mount("/ui", StaticFiles(directory=dashboard, html=True), name="dashboard")
 
     @app.get("/", include_in_schema=False)
     async def root() -> RedirectResponse:
-        return RedirectResponse("/docs")
+        return RedirectResponse("/ui/" if has_dashboard else "/docs")
 
     @app.get("/health")
     async def health(request: Request) -> dict:
@@ -121,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "status": "ok",
             "rules_version": rules.config.version if rules else None,
             "site_id": settings.site_id,
+            "site_name": site.site.name,
             "mqtt_enabled": settings.mqtt_enabled,
             "mqtt_connected": bool(mqtt and mqtt.connected),
             "ws_clients": request.app.state.pipeline.broadcaster.client_count,
@@ -190,7 +201,58 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/cameras")
     async def list_cameras(store: Store) -> list[dict]:
-        return await asyncio.to_thread(store.cameras)
+        """Configured cameras (with map position) merged with every camera that has sent events."""
+        seen = {c["camera_id"]: c for c in await asyncio.to_thread(store.cameras)}
+        cameras = []
+        for camera_id in sorted(set(site.cameras) | set(seen)):
+            info = site.cameras.get(camera_id)
+            cameras.append(
+                {
+                    "camera_id": camera_id,
+                    "name": info.name if info else camera_id,
+                    "lat": info.lat if info else None,
+                    "lon": info.lon if info else None,
+                    "last_event_at": seen.get(camera_id, {}).get("last_event_at"),
+                }
+            )
+        return cameras
+
+    @app.get("/media/{event_id}/{kind}")
+    async def media(
+        event_id: UUID, kind: Literal["snapshot", "clip"], store: Store, request: Request
+    ) -> StreamingResponse:
+        """Stream an event's snapshot or clip from Frigate, so consoles never talk to Frigate directly."""
+        try:
+            event = await asyncio.to_thread(store.get, str(event_id))
+        except EventNotFound:
+            raise HTTPException(404, "event not found") from None
+        ref = event.snapshot_ref if kind == "snapshot" else event.clip_ref
+        if not ref or not ref.startswith("frigate:"):
+            raise HTTPException(404, f"no {kind} recorded for this event")
+        url = settings.frigate_api_url.rstrip("/") + ref.removeprefix("frigate:")
+        client = httpx.AsyncClient(
+            transport=request.app.state.http_transport, timeout=httpx.Timeout(10.0, read=60.0)
+        )
+        try:
+            upstream = await client.send(client.build_request("GET", url), stream=True)
+        except httpx.HTTPError:
+            await client.aclose()
+            raise HTTPException(502, "Frigate is not reachable, so this media cannot be shown") from None
+        if upstream.status_code != 200:
+            await upstream.aclose()
+            await client.aclose()
+            raise HTTPException(404, f"Frigate has no {kind} for this event")
+
+        async def body() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in upstream.aiter_bytes():
+                    yield chunk
+            finally:
+                await upstream.aclose()
+                await client.aclose()
+
+        media_type = upstream.headers.get("content-type", "image/jpeg" if kind == "snapshot" else "video/mp4")
+        return StreamingResponse(body(), media_type=media_type)
 
     @app.get("/metrics/latency")
     async def latency(store: Store, limit: int = Query(500, ge=1, le=5000)) -> dict:

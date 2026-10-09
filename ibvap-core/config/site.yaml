@@ -1,0 +1,12 @@
+# Site and camera metadata for the operator map. Fictional BOP and coordinates.
+site:
+  name: Demo BOP (fictional)
+cameras:
+  cam-fence-east:
+    name: Fence line, east
+    lat: 26.9934
+    lon: 84.8512
+  cam-bop-road:
+    name: BOP approach road
+    lat: 26.9897
+    lon: 84.8549

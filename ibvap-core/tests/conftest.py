@@ -14,6 +14,9 @@ def settings(tmp_path):
         database_url=f"sqlite:///{tmp_path}/ibvap.db",
         mqtt_enabled=False,
         rules_path=str(tmp_path / "no-rules.yaml"),
+        site_path=str(tmp_path / "no-site.yaml"),
+        dashboard_dir=str(tmp_path / "no-dashboard"),
+        frigate_api_url="http://frigate.test:5000",
     )
 
 

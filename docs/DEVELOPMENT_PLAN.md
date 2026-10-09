@@ -159,4 +159,5 @@ Zone references (A/B/C, Trust Layer) follow the architecture in `CLAUDE.md` §3.
 | 1 — Ingestion & detection | Waiting on test footage + GPU info (MediaMTX approved) |
 | 2 — ibvap-core foundation | Done — verified against a real Mosquitto broker with Frigate-shaped sample events; not yet against live Frigate |
 | 3 — Rules engine | Done — all 8 rules unit-tested with synthetic tracks; verified over real MQTT with sample events, not yet on live video |
-| 4–10 | Not started |
+| 4 — Operator dashboard | Done — live queue, alert detail with lifecycle, camera map, search; verified in a browser against sample events (snapshots/clips need Frigate) |
+| 5–10 | Not started |

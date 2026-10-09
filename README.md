@@ -19,7 +19,7 @@ IBVAP is software-only AI video analytics for the IP CCTV cameras already instal
 | 1 | Camera ingestion + detection (Frigate, MQTT, test streams) | 🟡 Next — waiting on test footage | MQTT broker done; Frigate config pending |
 | 2 | ibvap-core: event ingestion, storage, alert lifecycle, REST + WebSocket API | ✅ Done | [Live run](#2-live-run-sample-frigate-events--alerts) |
 | 3 | Border rules engine (8 rules: fence, night, loitering, …) | ✅ Done | [Rules](#border-rules-implemented), [tests](#1-automated-tests) |
-| 4 | SSB operator dashboard (React) | ⏳ Planned | — |
+| 4 | SSB operator dashboard (React): live alert queue, evidence, actions, map, search | ✅ Done | [Screenshots](#operator-dashboard) |
 | 5 | Evidence hashing + Hyperledger Fabric ledger + "verify evidence" | ⏳ Planned | — |
 | 6 | Jev (TypeSafe AI) triage with offline fallback | ⏳ Planned | Fallback field already in every event |
 | 7 | Offline store-and-forward sync, edge → command centre (mTLS) | ⏳ Planned | Duplicate-safe event IDs already in place |
@@ -28,7 +28,7 @@ IBVAP is software-only AI video analytics for the IP CCTV cameras already instal
 
 Full plan: [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)
 
-**Honest status:** the backend and rules engine are tested end to end over a real MQTT broker, using events in Frigate's exact message format replayed by our script ([`publish_sample_events.py`](ibvap-core/scripts/publish_sample_events.py)). They have **not yet run on live camera video**; that is Phase 1.
+**Honest status:** the backend, rules engine and dashboard are tested end to end over a real MQTT broker, using events in Frigate's exact message format replayed by our script ([`publish_sample_events.py`](ibvap-core/scripts/publish_sample_events.py)). They have **not yet run on live camera video**; that is Phase 1. Until then the dashboard cannot show real snapshots or clips.
 
 ---
 
@@ -62,9 +62,9 @@ flowchart LR
     classDef done fill:#d1fadf,stroke:#12b76a,color:#054f31
     classDef next fill:#fef0c7,stroke:#f79009,color:#7a2e0e
     classDef planned fill:#f2f4f7,stroke:#98a2b3,color:#344054
-    class CORE,DB,MQ done
+    class CORE,DB,MQ,DASH done
     class FR,CAM next
-    class JEV,EV,DASH,C2,LEDGER planned
+    class JEV,EV,C2,LEDGER planned
 ```
 
 Green = built and tested · amber = next · grey = planned.
@@ -74,26 +74,59 @@ Green = built and tested · amber = next · grey = planned.
 
 ---
 
+## Operator dashboard
+
+Real screenshots of our dashboard (`dashboard/`), captured on **9 Oct 2026 at 18:58 IST** against ibvap-core with the sample events from our replay script. The operator name and plate are fictional.
+
+![IBVAP operator console: alert queue ranked by severity, a critical fence-crossing alert with its explanation, actions and history, and the camera map](docs/images/dashboard-desktop.png)
+
+What the screenshot shows:
+
+- **Alert queue (left):** ranked by severity. The critical fence crossing is at the top. The **Vehicle stopped** alert was raised on its own by the rules timer after the sample car stood still for 31 s (limit 30 s). A dot marks alerts nobody has acknowledged yet.
+- **Alert detail (centre):**
+  - **Why this alert fired:** direction, night flag, thresholds, rule and rules version, and who decided ("Border rule only", because Jev is not connected yet).
+  - **Actions:** the operator has acknowledged it, so the next actions offered are **Verify** or **Reject as false alarm**.
+  - **History:** every action, with the operator's name and note.
+- **Camera map (right):** each camera is coloured by its most severe open alert; clicking a camera filters the queue.
+- **Header:** live connection, camera-feed status and IST clock.
+
+What is not shown yet, and why:
+
+- The snapshot area says *"Snapshot could not be loaded"* because Frigate is not running yet (Phase 1). The console proxies snapshots and clips from Frigate through ibvap-core, and this path is covered by automated tests.
+- The map's OpenStreetMap background did not load in this headless-browser capture. The camera markers show anyway, which is also how the map behaves offline at a BOP.
+
+<details>
+<summary>Phone / narrow-screen layout</summary>
+
+<img src="docs/images/dashboard-mobile.png" alt="The same console on a phone-width screen, with queue, detail and map stacked" width="360">
+
+</details>
+
+---
+
 ## See it working
 
-Captured on **9 Oct 2026 at 01:06 IST**, on a development laptop: Fedora Linux, Python 3.12, Mosquitto 2.0.20 in Docker. Because it was night in IST, night-time severity rules applied.
+Sections 2–5 were captured on **9 Oct 2026 at 01:06 IST**, on a development laptop: Fedora Linux, Python 3.12, Mosquitto 2.0.20 in Docker. Because it was night in IST, night-time severity rules applied. Section 1 was re-run when the dashboard was added.
 
 ### 1. Automated tests
 
-67 tests covering the event schema, Frigate message mapping, storage and lifecycle, geometry, all 8 border rules (with synthetic movement tracks), and the API/WebSocket.
+Re-run on 9 Oct 2026 at 18:59 IST. There are 78 tests in total, all passing:
+- **71 backend tests:** event schema, Frigate message mapping, storage and lifecycle, geometry, all 8 border rules (with synthetic movement tracks), and the API, WebSocket and media proxy.
+- **7 dashboard tests:** alert ranking, live updates and the lifecycle actions offered.
 
 ```text
-$ uv run pytest
-collected 67 items
-
-tests/test_api.py ........                                               [ 11%]
-tests/test_event_schema.py ...............                               [ 34%]
-tests/test_frigate_mapper.py .........                                   [ 47%]
-tests/test_geometry.py ......                                            [ 56%]
+$ cd ibvap-core && uv run pytest
+tests/test_api.py ............                                           [ 16%]
+tests/test_event_schema.py ...............                               [ 38%]
+tests/test_frigate_mapper.py .........                                   [ 50%]
+tests/test_geometry.py ......                                            [ 59%]
 tests/test_rules_engine.py .......................                       [ 91%]
 tests/test_store.py ......                                               [100%]
+71 passed
 
-67 passed
+$ cd dashboard && npm test
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
 ```
 
 ### 2. Live run: sample Frigate events → alerts
@@ -297,7 +330,7 @@ Each alert records a version hash of the rules file, so any rule change can be t
 
 ## Run it yourself
 
-**Prerequisites:** Linux or macOS, Python 3.12, [uv](https://docs.astral.sh/uv/) and Docker.
+**Prerequisites:** Linux or macOS, Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 22 and Docker.
 
 **Terminal 1: MQTT broker.** Run this once; a second run fails with "name already in use" because the broker is already running.
 
@@ -316,6 +349,16 @@ uv sync
 uv run uvicorn ibvap_core.api:create_app --factory --port 8000
 ```
 
+**Build the dashboard (once):**
+
+```bash
+cd dashboard
+npm install
+npm run build
+```
+
+ibvap-core serves the built dashboard at http://127.0.0.1:8000/ui/. Restart ibvap-core if it was already running before the build.
+
 **Terminal 3: send sample events.**
 
 ```bash
@@ -327,12 +370,13 @@ uv run python scripts/publish_sample_events.py
 
 | URL | What you see |
 |---|---|
+| http://127.0.0.1:8000/ui/ | **Operator dashboard:** live alerts, actions, map, search |
 | http://127.0.0.1:8000/docs | Interactive API: try every endpoint, including ack / verify / escalate |
 | http://127.0.0.1:8000/events?order=severity | Alert queue, most severe first |
 | http://127.0.0.1:8000/health | Rules version, MQTT connection, connected consoles |
 | http://127.0.0.1:8000/metrics/latency | Processing latency |
 
-**Run the tests:** `cd ibvap-core && uv run pytest`
+**Run the tests:** `cd ibvap-core && uv run pytest` and `cd dashboard && npm test`
 
 **Stop the broker:** `docker stop ibvap-mqtt`
 
@@ -348,7 +392,7 @@ Without Docker, ibvap-core still runs with no broker (set `IBVAP_MQTT_ENABLED=fa
 | [`deploy/`](deploy/) | Docker Compose, MQTT broker config, environment template | 🟡 Partial |
 | [`docs/`](docs/) | Development plan, event JSON Schema, licence register | ✅ |
 | [`frigate/`](frigate/) | Frigate camera / zone / detector configuration | ⏳ Phase 1 |
-| [`dashboard/`](dashboard/) | React operator dashboard | ⏳ Phase 4 |
+| [`dashboard/`](dashboard/) | React operator dashboard | ✅ Working |
 | [`trust-layer/`](trust-layer/) | Hyperledger Fabric network + chaincode | ⏳ Phase 5 |
 | [`samples/`](samples/) | Test footage we have rights to use | ⏳ Phase 1 |
 
@@ -359,6 +403,7 @@ Without Docker, ibvap-core still runs with no broker (set `IBVAP_MQTT_ENABLED=fa
 - **[Frigate](https://github.com/blakeblackshear/frigate)** (MIT): camera ingestion and detection, used unmodified via its official Docker image.
 - **[Eclipse Mosquitto](https://mosquitto.org/)** (EPL-2.0 / EDL-1.0): MQTT broker.
 - **[FastAPI](https://fastapi.tiangolo.com/)**, **SQLAlchemy**, **Pydantic**, **aiomqtt**: backend libraries (MIT / BSD).
-- **Planned:** [Hyperledger Fabric](https://hyperledger-fabric.readthedocs.io/) (Apache-2.0), Jev by [TypeSafe AI](https://typesafe.ai) (commercial API), React and MapLibre (MIT / BSD).
+- **[React](https://react.dev/)** (MIT), **[MapLibre GL JS](https://maplibre.org/)** (BSD-3), **Barlow** typeface (OFL), map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors: dashboard.
+- **Planned:** [Hyperledger Fabric](https://hyperledger-fabric.readthedocs.io/) (Apache-2.0), Jev by [TypeSafe AI](https://typesafe.ai) (commercial API).
 
 Every component and its licence is listed in [docs/LICENSES.md](docs/LICENSES.md). We do not use AGPL-licensed detection packages. All code in this repository is our own work. Demo data (plates, names, sites) is fictional.

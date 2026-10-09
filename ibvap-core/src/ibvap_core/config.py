@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     frigate_topic_prefix: str = Field("frigate", validation_alias=_env("FRIGATE_TOPIC_PREFIX"))
 
     rules_path: str = Field("config/rules.yaml", validation_alias=_env("IBVAP_RULES_PATH"))
+    site_path: str = Field("config/site.yaml", validation_alias=_env("IBVAP_SITE_PATH"))
+
+    # Built operator dashboard (npm run build in dashboard/), served at /ui/ when present.
+    dashboard_dir: str = Field("../dashboard/dist", validation_alias=_env("IBVAP_DASHBOARD_DIR"))
+
+    # Frigate's internal API (port 5000), used to proxy snapshots and clips to the dashboard.
+    frigate_api_url: str = Field("http://localhost:5000", validation_alias=_env("FRIGATE_API_URL"))
 
     # Plate reads below this score are flagged for human review (CLAUDE.md §4, ANPR).
     plate_review_threshold: float = Field(0.8, validation_alias=_env("IBVAP_PLATE_REVIEW_THRESHOLD"))
