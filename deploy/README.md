@@ -1,7 +1,8 @@
 # deploy/ — Edge stack (Docker Compose)
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d                  # Mosquitto, MediaMTX (webcam as RTSP), Frigate
+docker compose -f deploy/docker-compose.yml up -d                  # portable stack (Windows/Docker Desktop)
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml up -d  # Linux webcam
 docker compose -f deploy/docker-compose.yml --profile core up -d   # also ibvap-core in a container
 docker compose -f deploy/docker-compose.yml ps
 docker compose -f deploy/docker-compose.yml logs -f frigate
@@ -11,9 +12,15 @@ docker compose -f deploy/docker-compose.yml down                   # stop (data 
 | Service | Port (127.0.0.1 only) | Role |
 |---|---|---|
 | mosquitto | 1883 | MQTT broker: Frigate publishes events, ibvap-core subscribes |
-| mediamtx | 8554 | Publishes the webcam (and optional looped test clips) as RTSP camera streams |
+| mediamtx | 8554 | Publishes configured RTSP/test sources; the Linux overlay adds the webcam |
 | frigate | 5000 (internal API), 8971 (UI), 1984 + 8555 (live view: go2rtc, WebRTC) | Detection, tracking, snapshots, clips and the dashboard's live view |
 | ibvap-core (profile `core`) | 8000 | Rules, alerts, API and dashboard |
+
+Use the base Compose file on Windows/Docker Desktop. It mounts
+`mediamtx.windows.yml`, which intentionally has no `/dev/video0` device.
+Use `docker-compose.linux.yml` on Linux when a local webcam is available;
+it adds the device and mounts the Linux MediaMTX configuration. Replayed
+events and external RTSP cameras work on both platforms.
 
 Optional overrides go in `deploy/.env` (copy from `.env.example`; git-ignored). Images are pinned: Frigate 0.18.0 by digest, MediaMTX 1.21.2, Mosquitto 2.0.20.
 

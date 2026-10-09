@@ -364,16 +364,24 @@ Each alert records a version hash of the rules file, so any rule change can be t
 The short version is below. For a full step-by-step guide, including installing prerequisites, running without a webcam, troubleshooting and resetting data, see **[SETUP.md](SETUP.md)**.
 
 **Prerequisites:**
-- Linux, with Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 22, Docker and the Docker Compose plugin
+- Linux, or Windows 10/11 with Docker Desktop using the WSL 2 backend
+- Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 22, Docker and Docker Compose
 - about 10 GB of free disk for the Frigate image
-- a webcam at `/dev/video0` for the live camera
+- a Linux webcam at `/dev/video0` for the optional live webcam camera; Windows users can use replayed events or an external RTSP camera
 
-**1. Start the edge stack:** the MQTT broker, the webcam as an RTSP camera, and Frigate.
+**1. Start the edge stack:** the MQTT broker, MediaMTX, and Frigate. Use the
+portable command on Windows, or add the Linux overlay for a Linux webcam.
 
 ```bash
 cd IBVAP-Intelligent-Border-Video-Analytics-Platform
 docker compose -f deploy/docker-compose.yml up -d
 docker compose -f deploy/docker-compose.yml ps        # all three should be "running"
+```
+
+On Linux with a webcam:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml up -d
 ```
 
 **2. Build the dashboard (once):**

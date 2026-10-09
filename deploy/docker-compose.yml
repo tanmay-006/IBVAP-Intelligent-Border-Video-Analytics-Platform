@@ -16,19 +16,18 @@ services:
     ports:
       - "127.0.0.1:1883:1883"
     volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro,Z
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto-data:/mosquitto/data
 
-  # Turns local video sources (the webcam, looped sample clips) into RTSP
-  # streams, so Frigate ingests them exactly as it would IP cameras.
+  # Turns network/test video sources into RTSP streams. The Linux webcam
+  # device is added by docker-compose.linux.yml; keeping it out of this
+  # portable base file allows Docker Desktop on Windows to start cleanly.
   mediamtx:
     image: bluenviron/mediamtx:1.21.2-ffmpeg
     restart: unless-stopped
-    devices:
-      - /dev/video0:/dev/video0
     volumes:
-      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro,Z
-      - ../samples:/samples:ro,z
+      - ./mediamtx/mediamtx.windows.yml:/mediamtx.yml:ro
+      - ../samples:/samples:ro
     ports:
       - "127.0.0.1:8554:8554"
 
@@ -38,7 +37,7 @@ services:
     shm_size: "256mb"
     volumes:
       - frigate-config:/config                    # Frigate's own database and model cache
-      - ../frigate/config.yml:/config/config.yml:Z  # our camera / detector configuration
+      - ../frigate/config.yml:/config/config.yml:ro  # our camera / detector configuration
       - frigate-media:/media/frigate              # clips and snapshots
       - type: tmpfs
         target: /tmp/cache
@@ -70,8 +69,8 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ibvap-data:/app/data
-      - ../ibvap-core/config:/app/config:ro,z
-      - ../dashboard/dist:/app/dashboard:ro,z
+      - ../ibvap-core/config:/app/config:ro
+      - ../dashboard/dist:/app/dashboard:ro
     depends_on:
       - mosquitto
       - frigate

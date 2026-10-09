@@ -1,0 +1,13 @@
+# Windows/Docker Desktop portable MediaMTX configuration.
+#
+# Docker Desktop cannot map a Windows webcam as /dev/video0. Use this
+# configuration with replayed events, an external RTSP camera, or a network
+# video source. The Linux webcam configuration is in mediamtx.yml.
+logLevel: info
+rtspAddress: :8554
+rtmp: false
+hls: false
+webrtc: false
+srt: false
+
+paths: {}

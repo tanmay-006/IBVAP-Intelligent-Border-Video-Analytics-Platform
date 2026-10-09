@@ -14,7 +14,10 @@
 
 | Camera | Source | Notes |
 |---|---|---|
-| `cam-gate-west` | Laptop webcam → MediaMTX → `rtsp://mediamtx:8554/webcam` | Live demo camera. Walk across the frame left → right to cross the virtual gate line inbound |
+| `cam-gate-west` | Linux laptop webcam → MediaMTX → `rtsp://mediamtx:8554/webcam` | Live demo camera. Start with `docker-compose.linux.yml`; walk left → right to cross the virtual gate line inbound |
+
+On Windows/Docker Desktop, the local `/dev/video0` webcam path is not
+available. Use an external RTSP/IP camera or the replayed-event demo instead.
 
 To add a camera:
 - **Real IP camera:** add an entry with its RTSP URL.

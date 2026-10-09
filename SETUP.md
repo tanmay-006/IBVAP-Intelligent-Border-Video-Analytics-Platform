@@ -1,13 +1,14 @@
 # IBVAP setup guide
 
-How to install, start and check the IBVAP edge stack on a development laptop, from a fresh clone to a live alert in the dashboard.
+How to install, start and check the IBVAP edge stack on a Linux or Windows
+development laptop, from a fresh clone to a live alert in the dashboard.
 
 What you will have running at the end:
 
 | Component | Runs in | Port (127.0.0.1 only) | Role |
 |---|---|---|---|
 | Mosquitto | Docker | 1883 | MQTT broker: Frigate publishes events, ibvap-core subscribes |
-| MediaMTX | Docker | 8554 | Publishes your webcam as an RTSP camera stream |
+| MediaMTX | Docker | 8554 | Publishes configured video sources as RTSP camera streams |
 | Frigate 0.18 | Docker | 5000 (API), 8971 (UI) | Detects and tracks people and vehicles; keeps snapshots and clips |
 | ibvap-core | Your terminal (or Docker) | 8000 | Border rules, alerts, API, and the operator dashboard at `/ui/` |
 
@@ -17,14 +18,46 @@ What you will have running at the end:
 
 | Need | Version | Check with |
 |---|---|---|
-| Linux (tested on Fedora 44) | — | — |
+| Linux (tested on Fedora 44) or Windows 10/11 | — | — |
 | Python | 3.12 | `python3 --version` |
 | [uv](https://docs.astral.sh/uv/getting-started/installation/) | 0.11+ | `uv --version` |
 | Node.js + npm | 22 | `node --version` |
-| Docker Engine | 24+ | `docker --version` |
+| Docker Engine 24+ (Linux) or Docker Desktop 4.30+ with the WSL 2 backend (Windows) | — | `docker --version` |
 | Docker Compose plugin | v2+ | `docker compose version` |
 | Free disk space | about 12 GB (the Frigate image alone is 8.6 GB) | `df -h /` |
-| Webcam at `/dev/video0` | optional | `ls /dev/video0` |
+| Webcam at `/dev/video0` (Linux only) | optional | `ls /dev/video0` |
+
+### Windows requirements
+
+Windows is supported through Docker Desktop and WSL 2. Install Docker Desktop,
+enable **Use the WSL 2 based engine**, and enable integration for your Ubuntu
+WSL distribution in **Settings → Resources → WSL Integration**. Run the
+Linux-style commands in this guide from that WSL terminal. PowerShell
+equivalents are included where they are useful.
+
+The Windows path starts the portable stack without mapping a Linux device. It
+supports the dashboard, backend, MQTT, Frigate, and replayed sample events.
+Direct laptop webcam capture remains a Linux-only convenience because the
+Linux MediaMTX configuration uses `/dev/video0`; on Windows use an external
+RTSP/IP camera or replay events instead.
+
+### Choose the Compose files
+
+Use the portable base file on Windows/Docker Desktop:
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+Use the Linux overlay when a Linux webcam is available:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml up -d
+```
+
+Do not add the Linux overlay on Windows. The platform-specific files preserve
+the same services and ports; only the local webcam device and MediaMTX
+configuration differ.
 
 **Docker without sudo:** your user must be in the `docker` group. Check with `groups`. If it isn't:
 1. Run `sudo usermod -aG docker $USER`.
@@ -44,7 +77,7 @@ What you will have running at the end:
 
   Optionally verify the download against `checksums.txt` from the same release page.
 
-**Optional NVIDIA GPU support (Fedora):**
+**Optional NVIDIA GPU support (Linux):**
 
 The NVIDIA Container Toolkit must be installed and Docker must be restarted
 before a container can access the GPU. The installation requires `sudo`:
@@ -115,14 +148,13 @@ docker compose -f deploy/docker-compose.yml pull
 
 `deploy/.env` is ignored by git, so never commit real passwords.
 
-**No webcam?** Open [`deploy/docker-compose.yml`](deploy/docker-compose.yml) and delete these two lines under `mediamtx`. Otherwise Docker refuses to start the stack.
+**Linux without a webcam:** use the portable base file only (omit
+`deploy/docker-compose.linux.yml`). You can still run the full demo with
+replayed events (step 5B).
 
-```yaml
-    devices:
-      - /dev/video0:/dev/video0
-```
-
-You can still run the full demo with replayed events (step 5B).
+**Windows:** use the portable base file only. It uses
+[`deploy/mediamtx/mediamtx.windows.yml`](deploy/mediamtx/mediamtx.windows.yml),
+which does not attempt to access `/dev/video0`.
 
 ---
 
@@ -135,10 +167,23 @@ docker compose -f deploy/docker-compose.yml up -d
 docker compose -f deploy/docker-compose.yml ps
 ```
 
+On Linux with a webcam, use the Linux overlay instead:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml up -d
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml ps
+```
+
 **With an NVIDIA GPU** (and the NVIDIA Container Toolkit set up), start it with the GPU override instead, so Frigate decodes video on the GPU:
 
 ```bash
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.gpu.yml up -d
+```
+
+On Linux with both an NVIDIA GPU and webcam, include both overlays:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml -f deploy/docker-compose.gpu.yml up -d
 ```
 
 To confirm the GPU is in use, run `nvidia-smi`; it should list Frigate's `ffmpeg` process. `GPU-Util` can still read 0–5%, because video decoding runs on the GPU's separate decoder, not its compute cores.
@@ -233,6 +278,7 @@ Closing the terminal does **not** stop IBVAP: the containers keep running and co
 |---|---|
 | Stop ibvap-core | Ctrl+C in its terminal |
 | Stop the edge stack (keeps data) | `docker compose -f deploy/docker-compose.yml down` |
+| Stop a Linux webcam stack | `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml down` |
 | Start again later | Step 1 and Step 2 of section 4; no setup needed |
 | Run ibvap-core in Docker too | `docker compose -f deploy/docker-compose.yml --profile core up -d --build` (skip Step 2) |
 
@@ -279,8 +325,8 @@ cd dashboard && npm test && cd ..
 | Dashboard says *"Snapshot could not be loaded"* | Event has no Frigate media (replayed sample events), or Frigate isn't running | For live events: `docker compose -f deploy/docker-compose.yml ps`; Frigate must be running |
 | No alerts when sitting in front of the webcam | Frigate detects only when something **moves**, and rules fire on movement (crossing the line) | Walk across the frame left → right |
 | Alerts show only as "Detection", no gate crossing | ibvap-core was started before the webcam camera was added to `rules.yaml` | Restart ibvap-core; `/health` should show the new `rules_version` |
-| `error gathering device information while adding custom device "/dev/video0"` | No webcam on this machine | Remove the `devices:` lines under `mediamtx` (section 3) |
-| MediaMTX logs show ffmpeg errors for `/dev/video0` | Webcam is busy in another app (video call, browser tab) | Close that app; `docker compose -f deploy/docker-compose.yml restart mediamtx` |
+| `error gathering device information while adding custom device "/dev/video0"` | The Linux webcam overlay was used without a Linux webcam, or it was used on Windows | Stop the stack and restart with only `-f deploy/docker-compose.yml`; use replayed events or an external RTSP camera |
+| MediaMTX logs show ffmpeg errors for `/dev/video0` | Linux webcam is busy in another app | Close that app; `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml restart mediamtx` |
 | Frigate keeps restarting / `no space left on device` | Disk full | `df -h /`; free space, or `docker system prune` to remove unused images |
 | Frigate UI password lost | — | `docker compose -f deploy/docker-compose.yml logs frigate \| grep Password` (first start only), or reset it from the Frigate UI as another admin |
 | Map shows markers but no background | No internet (OpenStreetMap tiles) | Expected offline; markers and alerts still work |
