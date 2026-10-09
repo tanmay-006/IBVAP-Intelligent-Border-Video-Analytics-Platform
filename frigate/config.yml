@@ -1,0 +1,73 @@
+# Frigate configuration for the IBVAP edge node (Zone B: stream gateway + detection).
+# Frigate 0.18 (MIT), official image. IBVAP consumes its MQTT events and HTTP API;
+# all border logic (fences, night rules, loitering, alerts) lives in ibvap-core.
+
+mqtt:
+  enabled: true
+  host: mosquitto
+  port: 1883
+  topic_prefix: frigate     # ibvap-core subscribes to frigate/events
+  client_id: frigate
+
+# Object detection on the CPU with OpenVINO and the SSDLite MobileNet v2 model
+# bundled in the Frigate image (COCO classes). GPU acceleration is a later option.
+detectors:
+  ov:
+    type: openvino
+    device: CPU
+
+model:
+  width: 300
+  height: 300
+  input_tensor: nhwc
+  input_pixel_format: bgr
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+
+objects:
+  track: [person, car, motorcycle, bus, truck, bicycle, dog, cow]
+  filters:
+    person:
+      min_score: 0.5
+      threshold: 0.6
+
+# Keep clips only around detections, for a short time: evidence for review,
+# minimal retention (privacy by design, and edge disks are small).
+record:
+  enabled: true
+  continuous:
+    days: 0
+  motion:
+    days: 0
+  alerts:
+    retain:
+      days: 2
+  detections:
+    retain:
+      days: 2
+
+snapshots:
+  enabled: true
+  bounding_box: true
+  retain:
+    default: 2
+
+# Privacy defaults (CLAUDE.md §9): recognition stays off until authorised.
+face_recognition:
+  enabled: false
+lpr:
+  enabled: false            # ANPR is enabled in Phase 8 with Indian plate formats
+
+cameras:
+  # Laptop webcam, served as an IP camera by MediaMTX (deploy/mediamtx/mediamtx.yml).
+  cam-gate-west:
+    ffmpeg:
+      inputs:
+        - path: rtsp://mediamtx:8554/webcam
+          input_args: preset-rtsp-restream
+          roles: [detect, record]
+    detect:
+      width: 1280
+      height: 720
+      fps: 5
+version: 0.18-0

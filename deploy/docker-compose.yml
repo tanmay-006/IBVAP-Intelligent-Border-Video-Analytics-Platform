@@ -1,5 +1,11 @@
-# Edge stack (Zone B). Phase 2: MQTT broker + ibvap-core.
-# Phase 1 adds Frigate and MediaMTX test streams to this file.
+# IBVAP edge node (Zone B) for development on one laptop.
+#
+#   docker compose -f deploy/docker-compose.yml up -d              # broker, camera stream, Frigate
+#   docker compose -f deploy/docker-compose.yml --profile core up -d   # + ibvap-core in a container
+#
+# During development ibvap-core usually runs outside Docker (uv run uvicorn ...),
+# reaching the broker on 127.0.0.1:1883 and Frigate's API on 127.0.0.1:5000.
+# All ports are bound to 127.0.0.1 only.
 name: ibvap-edge
 
 services:
@@ -9,10 +15,43 @@ services:
     ports:
       - "127.0.0.1:1883:1883"
     volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro,Z
       - mosquitto-data:/mosquitto/data
 
+  # Turns local video sources (the webcam, looped sample clips) into RTSP
+  # streams, so Frigate ingests them exactly as it would IP cameras.
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.2-ffmpeg
+    restart: unless-stopped
+    devices:
+      - /dev/video0:/dev/video0
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro,Z
+      - ../samples:/samples:ro,z
+    ports:
+      - "127.0.0.1:8554:8554"
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:0.18.0@sha256:9678a83a76e4730ac7d9ea7428370e32ae656d6b312aaad30d6c69f3fef14d35
+    restart: unless-stopped
+    shm_size: "256mb"
+    volumes:
+      - frigate-config:/config                    # Frigate's own database and model cache
+      - ../frigate/config.yml:/config/config.yml:Z  # our camera / detector configuration
+      - frigate-media:/media/frigate              # clips and snapshots
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+    ports:
+      - "127.0.0.1:5000:5000"   # internal API, used by ibvap-core (no auth; never expose beyond localhost)
+      - "127.0.0.1:8971:8971"   # Frigate web UI (login required)
+    depends_on:
+      - mosquitto
+      - mediamtx
+
   ibvap-core:
+    profiles: [core]
     build: ../ibvap-core
     restart: unless-stopped
     env_file:
@@ -20,15 +59,21 @@ services:
         required: false
     environment:
       MQTT_HOST: mosquitto
+      FRIGATE_API_URL: http://frigate:5000
       IBVAP_DATABASE_URL: sqlite:////app/data/ibvap.db
+      IBVAP_DASHBOARD_DIR: /app/dashboard
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ibvap-data:/app/data
-      - ../ibvap-core/config:/app/config:ro
+      - ../ibvap-core/config:/app/config:ro,z
+      - ../dashboard/dist:/app/dashboard:ro,z
     depends_on:
       - mosquitto
+      - frigate
 
 volumes:
   mosquitto-data:
+  frigate-config:
+  frigate-media:
   ibvap-data:

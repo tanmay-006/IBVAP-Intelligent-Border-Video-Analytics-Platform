@@ -1,9 +1,16 @@
-"""Runtime settings, read from environment variables (see deploy/.env.example)."""
+"""Runtime settings, read from environment variables (see deploy/.env.example).
+
+Relative paths are resolved against the ibvap-core folder, not the current directory,
+so the service behaves the same wherever it is started from.
+"""
 
 from functools import lru_cache
+from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+CORE_DIR = Path(__file__).resolve().parents[2]
 
 
 def _env(*names: str) -> AliasChoices:
@@ -11,7 +18,7 @@ def _env(*names: str) -> AliasChoices:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+    model_config = SettingsConfigDict(env_file=CORE_DIR / ".env", extra="ignore", populate_by_name=True)
 
     site_id: str = Field("BOP-DEMO-01", validation_alias=_env("IBVAP_SITE_ID"))
     database_url: str = Field("sqlite:///./data/ibvap.db", validation_alias=_env("IBVAP_DATABASE_URL"))
@@ -34,6 +41,20 @@ class Settings(BaseSettings):
 
     # Plate reads below this score are flagged for human review (CLAUDE.md §4, ANPR).
     plate_review_threshold: float = Field(0.8, validation_alias=_env("IBVAP_PLATE_REVIEW_THRESHOLD"))
+
+    @field_validator("rules_path", "site_path", "dashboard_dir")
+    @classmethod
+    def _from_core_dir(cls, value: str) -> str:
+        path = Path(value)
+        return str(path if path.is_absolute() else (CORE_DIR / path).resolve())
+
+    @field_validator("database_url")
+    @classmethod
+    def _sqlite_from_core_dir(cls, value: str) -> str:
+        prefix = "sqlite:///"
+        if value.startswith(prefix) and not value.startswith(prefix + "/") and value != prefix + ":memory:":
+            return prefix + str((CORE_DIR / value.removeprefix(prefix)).resolve())
+        return value
 
 
 @lru_cache

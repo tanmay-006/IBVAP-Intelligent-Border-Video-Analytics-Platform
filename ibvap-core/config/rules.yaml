@@ -101,3 +101,48 @@ cameras:
         severity: high
         night_severity: critical
         cooldown_s: 60
+
+  # Live demo camera: the laptop webcam, published as an RTSP stream by MediaMTX
+  # (deploy/mediamtx/mediamtx.yml), stands in for a gate camera. Walk across the
+  # frame from left to right to cross the virtual fence inbound.
+  cam-gate-west:
+    zones:
+      gate_inside:            # right half of the frame = Indian side
+        polygon: [[0.5, 0.0], [1.0, 0.0], [1.0, 1.0], [0.5, 1.0]]
+    tripwires:
+      gate_line:
+        points: [[0.5, 0.0], [0.5, 1.0]]
+        inbound_point: [0.9, 0.5]
+    rules:
+      - id: gate-crossing-inbound
+        type: tripwire
+        tripwire: gate_line
+        direction: inbound
+        objects: [person, car, motorcycle, truck]
+        min_confidence: 0.6
+        night_min_confidence: 0.45
+        severity: high
+        night_severity: critical
+        cooldown_s: 20
+      - id: gate-crossing-outbound
+        type: tripwire
+        tripwire: gate_line
+        direction: outbound
+        objects: [person, car, motorcycle, truck]
+        severity: medium
+        night_severity: high
+        cooldown_s: 20
+      - id: gate-night-movement
+        type: night_movement
+        zone: gate_inside
+        objects: [person, car, motorcycle, truck]
+        min_confidence: 0.45
+        severity: high
+        cooldown_s: 120
+      - id: gate-loitering
+        type: loitering
+        zone: gate_inside
+        dwell_s: 30
+        severity: medium
+        night_severity: high
+        cooldown_s: 300

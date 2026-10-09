@@ -4,7 +4,7 @@ Every third-party component used by IBVAP is listed here. Add a row before intro
 
 | Component | Used for | Licence | How we use it |
 |---|---|---|---|
-| Frigate | Camera ingestion, detection, face/LPR enrichments, recording | MIT | Official Docker image; config only, no source copied |
+| Frigate | Camera ingestion, detection, face/LPR enrichments, recording | MIT | Official Docker image 0.18.0 (pinned by digest); config only, no source copied |
 | Pydantic | Event schema and validation (ibvap-core) | MIT | Python dependency |
 | FastAPI | REST + WebSocket API (ibvap-core) | MIT | Python dependency |
 | Uvicorn (+ standard extras: uvloop, httptools, websockets, watchfiles, python-dotenv) | ASGI server | BSD-3-Clause (extras: MIT / Apache-2.0 / BSD) | Python dependency |
@@ -15,7 +15,9 @@ Every third-party component used by IBVAP is listed here. Add a row before intro
 | PyYAML | Rules configuration files | MIT | Python dependency |
 | tzdata | IANA time zones for the night window (slim containers) | Apache-2.0 | Python dependency |
 | Eclipse Mosquitto | MQTT broker | EPL-2.0 / EDL-1.0 (dual) | Official Docker image `eclipse-mosquitto` |
-| MediaMTX | RTSP server for looped test footage (development only) | MIT | Approved; added in Phase 1 |
+| MediaMTX | Publishes the webcam / looped test footage as RTSP camera streams (development only) | MIT | Official Docker image `bluenviron/mediamtx:1.21.2-ffmpeg` |
+| OpenVINO + SSDLite MobileNet v2 (COCO) | CPU object detection inside Frigate | Apache-2.0 | Bundled in the Frigate image; not redistributed by us |
+| Docker Compose | Runs the edge stack | Apache-2.0 | Developer tool |
 | HTTPX | Proxying Frigate snapshots/clips to the dashboard; API test client | BSD-3-Clause | Python dependency |
 | React, React DOM | Operator dashboard UI | MIT | npm dependency |
 | MapLibre GL JS | Camera map | BSD-3-Clause | npm dependency |

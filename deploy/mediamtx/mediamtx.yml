@@ -1,0 +1,28 @@
+# Development RTSP server (MediaMTX, MIT).
+# Republishes local video sources as RTSP streams, so Frigate ingests them exactly
+# like IP cameras at a BOP (Zone A). Only footage we have rights to use.
+
+logLevel: info
+rtspAddress: :8554
+rtmp: false
+hls: false
+webrtc: false
+srt: false
+
+paths:
+  # Laptop webcam -> rtsp://mediamtx:8554/webcam
+  webcam:
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel error
+      -f v4l2 -input_format mjpeg -framerate 15 -video_size 1280x720 -i /dev/video0
+      -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -pix_fmt yuv420p
+      -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: true
+
+  # To add a looped test video as another camera, put the file in samples/ and
+  # uncomment (then add a matching camera in frigate/config.yml):
+  # bop-road:
+  #   runOnInit: >-
+  #     ffmpeg -hide_banner -loglevel error -re -stream_loop -1 -i /samples/bop-road.mp4
+  #     -c copy -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+  #   runOnInitRestart: true

@@ -156,7 +156,7 @@ Zone references (A/B/C, Trust Layer) follow the architecture in `CLAUDE.md` §3.
 | Phase | Status |
 |---|---|
 | 0 — Foundations | Done |
-| 1 — Ingestion & detection | Waiting on test footage + GPU info (MediaMTX approved) |
+| 1 — Ingestion & detection | Mostly done — Frigate 0.18 + MediaMTX + Mosquitto in Compose; laptop webcam live, OpenVINO on CPU at 10 ms/frame. Pending: looped test clips for vehicle/night scenarios, live person-walk alert + latency measurement. GPU (RTX 3050) needs NVIDIA Container Toolkit (sudo) — optional |
 | 2 — ibvap-core foundation | Done — verified against a real Mosquitto broker with Frigate-shaped sample events; not yet against live Frigate |
 | 3 — Rules engine | Done — all 8 rules unit-tested with synthetic tracks; verified over real MQTT with sample events, not yet on live video |
 | 4 — Operator dashboard | Done — live queue, alert detail with lifecycle, camera map, search; verified in a browser against sample events (snapshots/clips need Frigate) |

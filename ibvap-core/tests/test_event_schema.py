@@ -86,3 +86,15 @@ def test_severity_rank_order():
 )
 def test_lifecycle_transitions(current, new, allowed):
     assert can_transition(current, new) is allowed
+
+
+def test_settings_paths_do_not_depend_on_cwd(tmp_path, monkeypatch):
+    from ibvap_core.config import CORE_DIR, Settings
+
+    monkeypatch.chdir(tmp_path)
+    s = Settings()
+    assert s.rules_path == str(CORE_DIR / "config" / "rules.yaml")
+    assert s.dashboard_dir == str((CORE_DIR / ".." / "dashboard" / "dist").resolve())
+    assert s.database_url == f"sqlite:///{CORE_DIR / 'data' / 'ibvap.db'}"
+    assert Settings(database_url="sqlite:////abs/x.db").database_url == "sqlite:////abs/x.db"
+    assert Settings(rules_path="/etc/rules.yaml").rules_path == "/etc/rules.yaml"

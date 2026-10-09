@@ -16,7 +16,7 @@ IBVAP is software-only AI video analytics for the IP CCTV cameras already instal
 | # | Component | Status | Evidence |
 |---|---|---|---|
 | 0 | Repo, shared event schema, CI, licence register | ✅ Done | [Event schema](ibvap-core/src/ibvap_core/schemas/event.py), [licences](docs/LICENSES.md) |
-| 1 | Camera ingestion + detection (Frigate, MQTT, test streams) | 🟡 Next — waiting on test footage | MQTT broker done; Frigate config pending |
+| 1 | Camera ingestion + detection (Frigate, MQTT, test streams) | 🟡 Running with a live camera (laptop webcam); looped test videos pending | [Live camera check](#6-live-camera-frigate) |
 | 2 | ibvap-core: event ingestion, storage, alert lifecycle, REST + WebSocket API | ✅ Done | [Live run](#2-live-run-sample-frigate-events--alerts) |
 | 3 | Border rules engine (8 rules: fence, night, loitering, …) | ✅ Done | [Rules](#border-rules-implemented), [tests](#1-automated-tests) |
 | 4 | SSB operator dashboard (React): live alert queue, evidence, actions, map, search | ✅ Done | [Screenshots](#operator-dashboard) |
@@ -28,7 +28,10 @@ IBVAP is software-only AI video analytics for the IP CCTV cameras already instal
 
 Full plan: [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)
 
-**Honest status:** the backend, rules engine and dashboard are tested end to end over a real MQTT broker, using events in Frigate's exact message format replayed by our script ([`publish_sample_events.py`](ibvap-core/scripts/publish_sample_events.py)). They have **not yet run on live camera video**; that is Phase 1. Until then the dashboard cannot show real snapshots or clips.
+**Honest status:**
+- **Tested end to end with replayed events:** the backend, rules engine and dashboard, over a real MQTT broker. The events are in Frigate's exact message format, replayed by our script ([`publish_sample_events.py`](ibvap-core/scripts/publish_sample_events.py)).
+- **Live camera, verified:** Frigate runs on a live camera stream and detects on the CPU. ibvap-core serves Frigate's real snapshots and clips to the dashboard.
+- **Not yet captured:** a full person-walks-past-the-camera run with a measured camera-to-alert latency. That is next.
 
 ---
 
@@ -62,8 +65,7 @@ flowchart LR
     classDef done fill:#d1fadf,stroke:#12b76a,color:#054f31
     classDef next fill:#fef0c7,stroke:#f79009,color:#7a2e0e
     classDef planned fill:#f2f4f7,stroke:#98a2b3,color:#344054
-    class CORE,DB,MQ,DASH done
-    class FR,CAM next
+    class CORE,DB,MQ,DASH,FR,CAM done
     class JEV,EV,C2,LEDGER planned
 ```
 
@@ -264,7 +266,24 @@ Operator names are fictional. From Phase 5, these transitions are hashed onto th
 | Stored → pushed to operator console | 0.7 ms | 1.3 ms |
 | **Total inside ibvap-core** | **5.0 ms** | **6.6 ms** |
 
-**What this number does and does not include:** it is IBVAP's own processing time only. Camera streaming and Frigate's detection time are not included, because no live camera was used. Our design target is under 2 s from camera frame to alert at the edge. We will measure that end to end once Frigate runs on live streams (Phase 1) and publish the real figure here.
+**What this number does and does not include:** it is IBVAP's own processing time only. Camera streaming and Frigate's detection time are not included, because no live camera was used. Our design target is under 2 s from camera frame to alert at the edge. Frigate now runs on a live camera (see section 6), and the end-to-end figure is the next measurement.
+
+### 6. Live camera (Frigate)
+
+Checked on **9 Oct 2026, 19:41–19:45 IST** with the full edge stack running in Docker Compose ([`deploy/docker-compose.yml`](deploy/docker-compose.yml)). The camera is the laptop webcam, published by MediaMTX as an RTSP stream exactly like an IP camera. No webcam images are reproduced here.
+
+| Check | Result |
+|---|---|
+| Frigate version | 0.18.0, official image, pinned by digest |
+| Object detector | OpenVINO, SSDLite MobileNet v2, on the laptop CPU (AMD Ryzen 5 7535HS) |
+| Detector inference time | **10 ms per frame** (Frigate `/api/stats`) |
+| Camera stream | 1280×720 from MediaMTX over RTSP; Frigate processing at 5 fps |
+| Snapshot and clip from Frigate for a live-camera event | 200 OK, JPEG 63 KB and MP4 7.6 MB |
+| Same snapshot and clip served to the dashboard through ibvap-core (`/media/{alert}/…`) | 200 OK, `image/jpeg` and `video/mp4` |
+
+We confirmed the media path by sending a Frigate-format message for a real Frigate event (made with Frigate's manual-event API) through the rules engine. It raised `critical tripwire_crossing on cam-gate-west` at night, and the dashboard path served that event's real snapshot and clip.
+
+**Not shown yet:** an alert caused by a person actually walking past the camera, and the camera-to-alert latency for it. Both are the next measurements, and we will publish them here.
 
 ---
 
@@ -330,18 +349,26 @@ Each alert records a version hash of the rules file, so any rule change can be t
 
 ## Run it yourself
 
-**Prerequisites:** Linux or macOS, Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 22 and Docker.
+**Prerequisites:**
+- Linux, with Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 22, Docker and the Docker Compose plugin
+- about 10 GB of free disk for the Frigate image
+- a webcam at `/dev/video0` for the live camera
 
-**Terminal 1: MQTT broker.** Run this once; a second run fails with "name already in use" because the broker is already running.
+**1. Start the edge stack:** the MQTT broker, the webcam as an RTSP camera, and Frigate.
 
 ```bash
 cd IBVAP-Intelligent-Border-Video-Analytics-Platform
-docker run -d --rm --name ibvap-mqtt -p 127.0.0.1:1883:1883 \
-  -v "$PWD/deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro,Z" \
-  eclipse-mosquitto:2.0.20
+docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml ps        # all three should be "running"
 ```
 
-**Terminal 2: ibvap-core.** Wait for `subscribed to frigate/events on localhost`.
+**2. Build the dashboard (once):**
+
+```bash
+cd dashboard && npm install && npm run build && cd ..
+```
+
+**3. Start ibvap-core** in its own terminal, from any folder. Wait for `loaded 3 camera rule sets` and `subscribed to frigate/events`.
 
 ```bash
 cd ibvap-core
@@ -349,38 +376,30 @@ uv sync
 uv run uvicorn ibvap_core.api:create_app --factory --port 8000
 ```
 
-**Build the dashboard (once):**
-
-```bash
-cd dashboard
-npm install
-npm run build
-```
-
-ibvap-core serves the built dashboard at http://127.0.0.1:8000/ui/. Restart ibvap-core if it was already running before the build.
-
-**Terminal 3: send sample events.**
-
-```bash
-cd ibvap-core
-uv run python scripts/publish_sample_events.py
-```
+**4. Make something happen:**
+- **Live:** walk across the webcam's view from left to right. That crosses the virtual gate line on `cam-gate-west` inbound, and it is a Critical alert at night.
+- **Without a camera:** `cd ibvap-core && uv run python scripts/publish_sample_events.py` replays scripted Frigate events for the two demo cameras.
 
 **In a browser:**
 
 | URL | What you see |
 |---|---|
-| http://127.0.0.1:8000/ui/ | **Operator dashboard:** live alerts, actions, map, search |
+| http://127.0.0.1:8000/ui/ | **Operator dashboard:** live alerts with snapshots and clips, actions, map, search |
+| http://127.0.0.1:8971 | Frigate's own UI (live view, detections). User `admin`; the first-run password is in `docker compose -f deploy/docker-compose.yml logs frigate \| grep Password` |
 | http://127.0.0.1:8000/docs | Interactive API: try every endpoint, including ack / verify / escalate |
-| http://127.0.0.1:8000/events?order=severity | Alert queue, most severe first |
 | http://127.0.0.1:8000/health | Rules version, MQTT connection, connected consoles |
 | http://127.0.0.1:8000/metrics/latency | Processing latency |
 
 **Run the tests:** `cd ibvap-core && uv run pytest` and `cd dashboard && npm test`
 
-**Stop the broker:** `docker stop ibvap-mqtt`
+**Stop everything:** Ctrl+C in the ibvap-core terminal, then `docker compose -f deploy/docker-compose.yml down`
 
-Without Docker, ibvap-core still runs with no broker (set `IBVAP_MQTT_ENABLED=false`); the API works, but no events arrive. Full API reference: [ibvap-core/README.md](ibvap-core/README.md).
+**Notes:**
+- To run ibvap-core in a container too, add `--profile core` to the `up` command and skip step 3.
+- All ports listen on 127.0.0.1 only.
+- Frigate detects only when something moves. An empty, still room produces no events, which is expected.
+
+Full API reference: [ibvap-core/README.md](ibvap-core/README.md). Camera and detector setup: [frigate/README.md](frigate/README.md).
 
 ---
 
@@ -389,12 +408,12 @@ Without Docker, ibvap-core still runs with no broker (set `IBVAP_MQTT_ENABLED=fa
 | Folder | Purpose | Status |
 |---|---|---|
 | [`ibvap-core/`](ibvap-core/) | Backend: MQTT ingestion, rules engine, alert lifecycle, REST/WebSocket API | ✅ Working |
-| [`deploy/`](deploy/) | Docker Compose, MQTT broker config, environment template | 🟡 Partial |
+| [`deploy/`](deploy/) | Docker Compose edge stack: MQTT broker, MediaMTX camera streams, Frigate, ibvap-core | ✅ Working |
 | [`docs/`](docs/) | Development plan, event JSON Schema, licence register | ✅ |
-| [`frigate/`](frigate/) | Frigate camera / zone / detector configuration | ⏳ Phase 1 |
+| [`frigate/`](frigate/) | Frigate camera / detector configuration | ✅ Live webcam camera |
 | [`dashboard/`](dashboard/) | React operator dashboard | ✅ Working |
 | [`trust-layer/`](trust-layer/) | Hyperledger Fabric network + chaincode | ⏳ Phase 5 |
-| [`samples/`](samples/) | Test footage we have rights to use | ⏳ Phase 1 |
+| [`samples/`](samples/) | Test footage we have rights to use | ⏳ Clips to be recorded |
 
 ---
 
@@ -402,6 +421,8 @@ Without Docker, ibvap-core still runs with no broker (set `IBVAP_MQTT_ENABLED=fa
 
 - **[Frigate](https://github.com/blakeblackshear/frigate)** (MIT): camera ingestion and detection, used unmodified via its official Docker image.
 - **[Eclipse Mosquitto](https://mosquitto.org/)** (EPL-2.0 / EDL-1.0): MQTT broker.
+- **[MediaMTX](https://github.com/bluenviron/mediamtx)** (MIT): publishes local video sources as RTSP camera streams for development.
+- **[OpenVINO](https://github.com/openvinotoolkit/openvino)** (Apache-2.0) with the SSDLite MobileNet v2 model, both bundled in the Frigate image: CPU object detection.
 - **[FastAPI](https://fastapi.tiangolo.com/)**, **SQLAlchemy**, **Pydantic**, **aiomqtt**: backend libraries (MIT / BSD).
 - **[React](https://react.dev/)** (MIT), **[MapLibre GL JS](https://maplibre.org/)** (BSD-3), **Barlow** typeface (OFL), map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors: dashboard.
 - **Planned:** [Hyperledger Fabric](https://hyperledger-fabric.readthedocs.io/) (Apache-2.0), Jev by [TypeSafe AI](https://typesafe.ai) (commercial API).
