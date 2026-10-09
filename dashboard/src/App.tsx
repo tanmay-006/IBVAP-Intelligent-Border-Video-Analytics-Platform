@@ -5,6 +5,7 @@ import { AlertDetail } from "./components/AlertDetail";
 import { AlertQueue } from "./components/AlertQueue";
 import { CameraMap } from "./components/CameraMap";
 import { Header } from "./components/Header";
+import { LiveCamera } from "./components/LiveCamera";
 import { SearchView } from "./components/SearchView";
 import type { Camera, Health, IbvapEvent } from "./types";
 import { useAlertStream } from "./useAlertStream";
@@ -97,6 +98,7 @@ export function App() {
             camera={selected ? cameraById[selected.camera_id] : undefined}
             onUpdated={(e) => merge([e])}
           />
+          <LiveCamera camera={selected ? cameraById[selected.camera_id] : cameras[0]} />
           <CameraMap
             cameras={cameras}
             events={all}

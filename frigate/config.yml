@@ -9,6 +9,12 @@ mqtt:
   topic_prefix: frigate     # ibvap-core subscribes to frigate/events
   client_id: frigate
 
+# Expose the webcam through go2rtc for the operator dashboard's live view.
+go2rtc:
+  streams:
+    cam-gate-west:
+      - rtsp://mediamtx:8554/webcam
+
 # Object detection on the CPU with OpenVINO and the SSDLite MobileNet v2 model
 # bundled in the Frigate image (COCO classes). GPU acceleration is a later option.
 detectors:

@@ -24,7 +24,7 @@ Then add the camera's zones and rules in [`ibvap-core/config/rules.yaml`](../ibv
 
 ## Frigate UI
 
-Open http://127.0.0.1:8971 and log in as `admin`. On first start, Frigate prints a generated password:
+Open https://127.0.0.1:8971 and log in as `admin`. On first start, Frigate prints a generated password:
 
 ```bash
 docker compose -f deploy/docker-compose.yml logs frigate | grep Password
@@ -34,4 +34,34 @@ The internal API on port 5000 has no login. It is bound to 127.0.0.1, and only i
 
 ## GPU (optional)
 
-This laptop has an NVIDIA RTX 3050. To use it, install the NVIDIA Container Toolkit (needs admin rights), switch to the `-tensorrt` Frigate image and an ONNX model. The CPU detector is already well within the real-time budget for a few cameras.
+This laptop has an NVIDIA RTX 3050. The NVIDIA Container Toolkit setup on Fedora is:
+
+```bash
+cd /home/tanmay/IBVAP-Intelligent-Border-Video-Analytics-Platform
+
+curl -fsSL \
+  https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo \
+  | sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo >/dev/null
+
+sudo dnf -y install nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Verify that Docker can access the GPU before changing the Frigate detector:
+
+```bash
+docker info --format '{{json .Runtimes}}'
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+```
+
+The Docker runtimes output must include `nvidia`, and the CUDA test must list the RTX 3050. The toolkit alone does not make Frigate use the GPU. GPU detection also requires a compatible Frigate TensorRT/ONNX image and model, plus a matching detector entry in [`config.yml`](config.yml). Until those are installed and validated, this project intentionally keeps the tested OpenVINO CPU detector:
+
+```yaml
+detectors:
+  ov:
+    type: openvino
+    device: CPU
+```
+
+The CPU detector is already well within the real-time budget for a few cameras. Do not remove the CPU detector until the GPU detector passes the CUDA check and Frigate starts healthy with live detections.

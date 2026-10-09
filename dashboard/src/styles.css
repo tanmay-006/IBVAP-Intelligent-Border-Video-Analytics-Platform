@@ -70,6 +70,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--line);
 }
 .live > section { background: var(--bg); min-height: 0; overflow: auto; }
+.live-camera {
+  display: grid;
+  grid-template-rows: auto minmax(180px, 1fr) auto;
+  min-width: 0;
+}
+.live-camera iframe {
+  width: 100%;
+  min-height: 220px;
+  border: 0;
+  background: #0d171c;
+}
+.live-camera-note {
+  margin: 0;
+  padding: 0.45rem 1rem 0.65rem;
+  color: var(--ink-3);
+  font-size: var(--step--1);
+}
+.camera-label {
+  color: var(--ink-2);
+  font-size: var(--step--1);
+}
 
 .pane-head {
   display: flex;

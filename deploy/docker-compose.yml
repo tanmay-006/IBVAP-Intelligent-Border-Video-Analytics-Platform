@@ -46,6 +46,7 @@ services:
     ports:
       - "127.0.0.1:5000:5000"   # internal API, used by ibvap-core (no auth; never expose beyond localhost)
       - "127.0.0.1:8971:8971"   # Frigate web UI (login required)
+      - "127.0.0.1:1984:1984"   # go2rtc live stream for the operator dashboard
     depends_on:
       - mosquitto
       - mediamtx

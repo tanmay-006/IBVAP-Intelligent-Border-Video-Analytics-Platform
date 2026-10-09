@@ -349,6 +349,8 @@ Each alert records a version hash of the rules file, so any rule change can be t
 
 ## Run it yourself
 
+The short version is below. For a full step-by-step guide, including installing prerequisites, running without a webcam, troubleshooting and resetting data, see **[SETUP.md](SETUP.md)**.
+
 **Prerequisites:**
 - Linux, with Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 22, Docker and the Docker Compose plugin
 - about 10 GB of free disk for the Frigate image
@@ -392,7 +394,7 @@ uv run uvicorn ibvap_core.api:create_app --factory --port 8000
 
 **Run the tests:** `cd ibvap-core && uv run pytest` and `cd dashboard && npm test`
 
-**Stop everything:** Ctrl+C in the ibvap-core terminal, then `docker compose -f deploy/docker-compose.yml down`
+**Stop everything:** Ctrl+C in the ibvap-core terminal, then `docker compose -f deploy/docker-compose.yml down`. Closing the terminal is not enough; see [STOPPING.md](STOPPING.md).
 
 **Notes:**
 - To run ibvap-core in a container too, add `--profile core` to the `up` command and skip step 3.
