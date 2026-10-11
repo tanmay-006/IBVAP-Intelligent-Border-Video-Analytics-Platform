@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildQueue, isOpen, needsAttention } from "./alerts";
+import { buildQueue, isOpen, needsAttention, type QueueOrder } from "./alerts";
 import { api } from "./api";
 import { AlertDetail } from "./components/AlertDetail";
 import { AlertQueue } from "./components/AlertQueue";
@@ -27,6 +27,21 @@ export function App() {
   const [showDetections, setShowDetections] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
   const [cameraFilter, setCameraFilter] = useState<string | null>(null);
+  const [order, setOrderState] = useState<QueueOrder>(() => {
+    try {
+      return localStorage.getItem("ibvap.queueOrder") === "severity" ? "severity" : "newest";
+    } catch {
+      return "newest";
+    }
+  });
+  const setOrder = (o: QueueOrder) => {
+    setOrderState(o);
+    try {
+      localStorage.setItem("ibvap.queueOrder", o);
+    } catch {
+      // storage unavailable; keep for this session
+    }
+  };
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -45,8 +60,8 @@ export function App() {
 
   const all = useMemo(() => Object.values(events), [events]);
   const queue = useMemo(
-    () => buildQueue(events, { showDetections, showClosed, cameraId: cameraFilter }),
-    [events, showDetections, showClosed, cameraFilter],
+    () => buildQueue(events, { showDetections, showClosed, cameraId: cameraFilter, order }),
+    [events, showDetections, showClosed, cameraFilter, order],
   );
   const cameraById = useMemo(() => Object.fromEntries(cameras.map((c) => [c.camera_id, c])), [cameras]);
 
@@ -107,6 +122,8 @@ export function App() {
             onToggleDetections={() => setShowDetections((v) => !v)}
             onToggleClosed={() => setShowClosed((v) => !v)}
             onClearCamera={() => setCameraFilter(null)}
+            order={order}
+            onOrder={setOrder}
             now={now}
           />
           <AlertDetail

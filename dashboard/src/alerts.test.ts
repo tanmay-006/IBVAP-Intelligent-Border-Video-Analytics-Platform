@@ -42,7 +42,7 @@ describe("buildQueue", () => {
     c: ev("c", { severity: "high", timestamp: "2026-10-09T11:00:00Z" }),
     d: ev("d", { event_type: "detection", severity: "informational" }),
     e: ev("e", { severity: "critical", status: "closed" }),
-    f: ev("f", { severity: "low", camera_id: "cam-2" }),
+    f: ev("f", { severity: "low", camera_id: "cam-2", timestamp: "2026-10-09T10:30:00Z" }),
   };
 
   it("ranks by severity, then newest first", () => {
@@ -53,6 +53,10 @@ describe("buildQueue", () => {
     const ids = buildQueue(events, { ...opts, showDetections: true, showClosed: true }).map((e) => e.event_id);
     expect(ids).toContain("d");
     expect(ids).toContain("e");
+  });
+
+  it("can rank newest first instead", () => {
+    expect(buildQueue(events, { ...opts, order: "newest" }).map((e) => e.event_id)).toEqual(["c", "f", "a", "b"]);
   });
 
   it("filters by camera", () => {

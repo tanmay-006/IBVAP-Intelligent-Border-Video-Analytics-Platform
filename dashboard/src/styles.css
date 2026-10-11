@@ -396,7 +396,7 @@ input[type="checkbox"] { height: auto; accent-color: var(--primary); }
   cursor: pointer;
 }
 .segmented button + button { border-left: 1px solid var(--line-strong); }
-.segmented button[aria-selected="true"] { background: var(--primary); color: var(--on-primary); }
+.segmented button[aria-selected="true"], .segmented button[aria-checked="true"] { background: var(--primary); color: var(--on-primary); }
 .segmented button:disabled { cursor: not-allowed; }
 
 .detail-columns { display: grid; grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr); gap: 1rem; align-items: start; }
@@ -572,3 +572,6 @@ input[type="checkbox"] { height: auto; accent-color: var(--primary); }
 /* Without media, the evidence frame only needs room for its message. */
 .video-frame.no-media { aspect-ratio: auto; min-height: 7.5rem; }
 .video-frame { max-height: 56vh; }
+
+.queue-head .segmented { order: 3; flex-basis: 100%; }
+.queue-head .segmented button { flex: 1; }

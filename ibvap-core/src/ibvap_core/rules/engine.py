@@ -29,12 +29,20 @@ from ibvap_core.rules.config import (
     NightMovementRule,
     RuleBase,
     RulesConfig,
+    TripwireConfig,
     TripwireRule,
     VehicleStoppedRule,
     WrongDirectionRule,
     ZoneEntryRule,
 )
-from ibvap_core.rules.geometry import Point, angle_between_deg, point_in_polygon, segments_intersect, side
+from ibvap_core.rules.geometry import (
+    Point,
+    angle_between_deg,
+    distance_to_segment,
+    point_in_polygon,
+    segments_intersect,
+    side,
+)
 from ibvap_core.schemas import Direction, EventType, Explanation, IBVAPEvent, ObjectType, Versions
 
 log = logging.getLogger(__name__)
@@ -70,6 +78,8 @@ class Track:
     zones: dict[str, float] = field(default_factory=dict)  # zone -> entered at
     entries: dict[str, deque[float]] = field(default_factory=dict)
     fired: set[tuple[Any, ...]] = field(default_factory=set)  # once-per-visit keys
+    wire_side: dict[str, tuple[int, Point]] = field(default_factory=dict)  # tripwire -> confirmed side, point
+    wire_touched: set[str] = field(default_factory=set)  # tripwires the path crossed since the last confirm
 
     @property
     def last_t(self) -> float:
@@ -148,10 +158,14 @@ class RulesEngine:
         track.points.append((t, p))
         track.still_since = t  # a new path point means the object moved
 
-        if prev is not None:
+        for name, wire in cam.tripwires.items():
+            crossing = self._wire_crossing(wire, name, track, prev, p)
+            if crossing is None:
+                continue
+            direction, start = crossing
             for rule in cam.rules:
-                if isinstance(rule, TripwireRule):
-                    alert = self._check_tripwire(cam, rule, track, prev, p, t)
+                if isinstance(rule, TripwireRule) and rule.tripwire == name:
+                    alert = self._tripwire_alert(rule, track, direction, start, p, t)
                     if alert:
                         alerts.append(alert)
 
@@ -193,31 +207,54 @@ class RulesEngine:
                     alerts.append(alert)
         return alerts
 
-    def _check_tripwire(
-        self, cam: CameraRules, rule: TripwireRule, track: Track, a: Point, b: Point, t: float
+    @staticmethod
+    def _wire_crossing(
+        wire: TripwireConfig, name: str, track: Track, prev: Point | None, p: Point
+    ) -> tuple[Direction, Point] | None:
+        """Detect a crossing of `wire` with hysteresis.
+
+        A track's side of the line is only confirmed once it is more than `dead_zone`
+        away from it. A crossing is a change of confirmed side whose path actually
+        intersected the (finite) line, so wobbling around the line raises nothing.
+        """
+        segments = list(zip(wire.points, wire.points[1:], strict=False))
+        if prev is not None and any(segments_intersect(prev, p, q1, q2) for q1, q2 in segments):
+            track.wire_touched.add(name)
+
+        q1, q2 = min(segments, key=lambda seg: distance_to_segment(p, *seg))
+        if distance_to_segment(p, q1, q2) < wire.dead_zone:
+            return None
+        here = side(q1, q2, p)
+        inbound = side(q1, q2, wire.inbound_point)
+        if here == 0 or inbound == 0:
+            return None
+        current = 1 if here == inbound else -1  # +1 = protected (inbound) side
+
+        confirmed = track.wire_side.get(name)
+        track.wire_side[name] = (current, p)
+        touched = name in track.wire_touched
+        track.wire_touched.discard(name)
+        if not touched or (confirmed is not None and confirmed[0] == current):
+            return None
+        # Side changed, or the track was first seen on the line and has now moved clear through it.
+        start = confirmed[1] if confirmed else (prev or p)
+        return (Direction.INBOUND if current == 1 else Direction.OUTBOUND), start
+
+    def _tripwire_alert(
+        self, rule: TripwireRule, track: Track, direction: Direction, a: Point, b: Point, t: float
     ) -> IBVAPEvent | None:
-        wire = cam.tripwires[rule.tripwire]
-        for q1, q2 in zip(wire.points, wire.points[1:], strict=False):
-            if not segments_intersect(a, b, q1, q2):
-                continue
-            inbound_side = side(q1, q2, wire.inbound_point)
-            end_side = side(q1, q2, b)
-            if end_side == 0:
-                return None  # stopped exactly on the line; the next point decides
-            direction = Direction.INBOUND if end_side == inbound_side else Direction.OUTBOUND
-            if rule.direction != "any" and direction.value != rule.direction:
-                return None
-            if not self._passes(rule, track, t):
-                return None
-            return self._fire(
-                rule,
-                track,
-                t,
-                direction=direction,
-                summary=f"{track.label} crossed tripwire {rule.tripwire} ({direction.value})",
-                params={"tripwire": rule.tripwire, "from": a, "to": b},
-            )
-        return None
+        if rule.direction != "any" and direction.value != rule.direction:
+            return None
+        if not self._passes(rule, track, t):
+            return None
+        return self._fire(
+            rule,
+            track,
+            t,
+            direction=direction,
+            summary=f"{track.label} crossed tripwire {rule.tripwire} ({direction.value})",
+            params={"tripwire": rule.tripwire, "from": a, "to": b},
+        )
 
     # ------------------------------------------------------- state-based rules
 

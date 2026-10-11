@@ -91,7 +91,7 @@ Real screenshots of our dashboard (`dashboard/`), captured on **9 Oct 2026 at 22
 
 How the screen is organised:
 
-- **Alert queue (left):** ranked by severity, then newest first. The **Vehicle stopped** alert was raised on its own by the rules timer, after the sample car stood still for 31 s (limit 30 s). A dot marks alerts nobody has acknowledged yet.
+- **Alert queue (left):** newest first by default, or most severe first with one click; the choice is remembered. The **Vehicle stopped** alert was raised on its own by the rules timer, after the sample car stood still for 31 s (limit 30 s). A dot marks alerts nobody has acknowledged yet.
 - **Selected alert (centre):**
   - **Evidence:** a Snapshot / Clip switch.
   - **Why this alert fired:** direction, night flag, thresholds, rule and rules version, and who decided ("Border rule only", because Jev is not connected yet).

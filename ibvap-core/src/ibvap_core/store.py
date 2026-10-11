@@ -40,6 +40,7 @@ class EventFilter:
     since: datetime | None = None
     until: datetime | None = None
     open_only: bool = False
+    alerts_only: bool = False  # exclude raw Frigate detections
     order: str = "time"  # time | severity
     limit: int = 100
     offset: int = 0
@@ -180,6 +181,8 @@ class EventStore:
             stmt = stmt.where(EventRow.timestamp < _naive_utc(f.until))
         if f.open_only:
             stmt = stmt.where(EventRow.status.not_in(CLOSED_STATUSES))
+        if f.alerts_only:
+            stmt = stmt.where(EventRow.event_type != EventType.DETECTION.value)
         if f.order == "severity":
             stmt = stmt.order_by(EventRow.severity_rank.desc(), EventRow.timestamp.desc())
         else:

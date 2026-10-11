@@ -329,6 +329,8 @@ cd dashboard && npm test && cd ..
 | MediaMTX logs show ffmpeg errors for `/dev/video0` | Linux webcam is busy in another app | Close that app; `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.linux.yml restart mediamtx` |
 | Frigate keeps restarting / `no space left on device` | Disk full | `df -h /`; free space, or `docker system prune` to remove unused images |
 | Frigate UI password lost | — | `docker compose -f deploy/docker-compose.yml logs frigate \| grep Password` (first start only), or reset it from the Frigate UI as another admin |
+| New alerts appear in the terminal log but not at the top of the dashboard | The queue is set to **Most severe first**, so older unacknowledged critical alerts stay above newer ones | Switch the queue to **Newest first**. To clear test alerts, [reset the demo data](#9-reset-demo-data) |
+| Many crossing alerts while sitting near the webcam | Moving about near the gate line | Raise `dead_zone` for `gate_line` in `ibvap-core/config/rules.yaml` (now 0.08), then restart ibvap-core |
 | Map shows markers but no background | No internet (OpenStreetMap tiles) | Expected offline; markers and alerts still work |
 | Live view stays black or says the stream is offline | Frigate not running, or the webcam is busy in another app | `docker compose -f deploy/docker-compose.yml ps`; close other apps using the webcam |
 | Live view lags by a few seconds | Browser fell back from WebRTC to MSE | Use the dashboard on the same machine as the stack (WebRTC is set up for 127.0.0.1), and reload the page |

@@ -88,10 +88,13 @@ export function applyMessage(events: EventMap, msg: StreamMessage): EventMap {
   return { ...events, [msg.event.event_id]: msg.event };
 }
 
+export type QueueOrder = "newest" | "severity";
+
 export interface QueueOptions {
   showDetections: boolean;
   showClosed: boolean;
   cameraId: string | null;
+  order?: QueueOrder;
 }
 
 export function buildQueue(events: EventMap, opts: QueueOptions): IbvapEvent[] {
@@ -99,11 +102,11 @@ export function buildQueue(events: EventMap, opts: QueueOptions): IbvapEvent[] {
     .filter((e) => opts.showDetections || e.event_type !== "detection")
     .filter((e) => opts.showClosed || isOpen(e.status))
     .filter((e) => !opts.cameraId || e.camera_id === opts.cameraId)
-    .sort(
-      (a, b) =>
-        SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] ||
-        Date.parse(b.timestamp) - Date.parse(a.timestamp),
-    );
+    .sort((a, b) => {
+      const newer = Date.parse(b.timestamp) - Date.parse(a.timestamp);
+      if (opts.order === "newest") return newer;
+      return SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || newer;
+    });
 }
 
 export function highestOpenSeverity(events: IbvapEvent[], cameraId: string): Severity | null {

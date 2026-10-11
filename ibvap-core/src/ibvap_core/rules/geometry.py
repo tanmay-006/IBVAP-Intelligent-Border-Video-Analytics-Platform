@@ -57,3 +57,12 @@ def angle_between_deg(u: Point, v: Point) -> float:
         return 0.0
     cos = (u[0] * v[0] + u[1] * v[1]) / (nu * nv)
     return math.degrees(math.acos(max(-1.0, min(1.0, cos))))
+
+
+def distance_to_segment(p: Point, a: Point, b: Point) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length2 = dx * dx + dy * dy
+    if length2 == 0:
+        return math.dist(p, a)
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length2))
+    return math.dist(p, (a[0] + t * dx, a[1] + t * dy))

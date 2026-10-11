@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from ibvap_core.samples import frigate_message
 
@@ -70,14 +71,23 @@ def test_websocket_live_push_marks_delivered_and_records_latency(client):
     assert 0 <= latency["frame_to_console"]["p50_ms"] < 2000
 
 
-def test_websocket_snapshot_delivers_backlog(client):
-    ingest(client, frigate_id="backlog-1")
-    eid = first_event_id(client)
+def test_websocket_snapshot_delivers_alert_backlog_but_not_raw_detections(client):
+    from ibvap_core.schemas import EventType, Severity
+
+    ingest(client, frigate_id="backlog-1")  # raw detection only
+    detection_id = first_event_id(client)
+    store = client.app.state.pipeline.store
+    alert = store.get(detection_id).model_copy(
+        update={"event_id": uuid.uuid4(), "event_type": EventType.LOITERING, "severity": Severity.MEDIUM}
+    )
+    store.upsert_event(alert, None, None)
+
     with client.websocket_connect("/ws/alerts") as ws:
         snapshot = ws.receive_json()
-        assert [e["event_id"] for e in snapshot["events"]] == [eid]
+        assert [e["event_id"] for e in snapshot["events"]] == [str(alert.event_id)]
         assert ws.receive_json()["event"]["status"] == "delivered"
-    assert client.get(f"/events/{eid}").json()["status"] == "delivered"
+    assert client.get(f"/events/{alert.event_id}").json()["status"] == "delivered"
+    assert client.get(f"/events/{detection_id}").json()["status"] == "generated"
 
 
 def test_no_console_means_not_delivered(client):
@@ -202,3 +212,35 @@ def test_root_serves_dashboard_when_built(settings, tmp_path):
     with TestClient(create_app(settings)) as client:
         assert client.get("/", follow_redirects=False).headers["location"] == "/ui/"
         assert "Operator Console" in client.get("/ui/").text
+
+
+def test_ws_snapshot_is_newest_open_alerts_without_detections(settings, tmp_path):
+    import shutil
+    from datetime import UTC, datetime
+
+    from fastapi.testclient import TestClient
+
+    from ibvap_core.api import create_app
+
+    shutil.copy("config/rules.yaml", tmp_path / "rules.yaml")
+    settings = settings.model_copy(update={"rules_path": str(tmp_path / "rules.yaml")})
+    day = datetime(2026, 10, 10, 6, 20, tzinfo=UTC).timestamp()
+    with TestClient(create_app(settings)) as client:
+        for i, t0 in enumerate((day, day + 600)):
+            path = [(0.5, 0.2, t0), (0.5, 0.6, t0 + 2)]
+            msg = frigate_message(
+                "update",
+                frigate_id=f"walker-{i}",
+                camera="cam-fence-east",
+                path=path,
+                frame_time=t0 + 2,
+                start_time=t0,
+            )
+            client.portal.call(client.app.state.pipeline.handle_frigate_payload, json.dumps(msg))
+        with client.websocket_connect("/ws/alerts") as ws:
+            snapshot = ws.receive_json()
+        types = {e["event_type"] for e in snapshot["events"]}
+        assert "detection" not in types and "tripwire_crossing" in types
+        times = [e["timestamp"] for e in snapshot["events"]]
+        assert times == sorted(times, reverse=True)
+        assert all(e["event_type"] != "detection" for e in client.get("/events?alerts_only=true").json())

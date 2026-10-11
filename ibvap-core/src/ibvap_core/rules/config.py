@@ -71,6 +71,13 @@ class ZoneConfig(Strict):
 class TripwireConfig(Strict):
     points: list[NormPoint] = Field(min_length=2, description="Polyline, e.g. along the fence")
     inbound_point: NormPoint = Field(description="Any point on the Indian (protected) side of the line")
+    dead_zone: float = Field(
+        0.03,
+        ge=0,
+        le=0.25,
+        description="A crossing counts only once the object is this far past the line (fraction of the "
+        "frame), so jitter around the line does not raise alerts",
+    )
 
     @model_validator(mode="after")
     def _validate(self) -> TripwireConfig:

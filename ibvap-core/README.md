@@ -25,7 +25,7 @@ Settings come from environment variables (see `../deploy/.env.example`). Set `IB
 Configured per camera in [`config/rules.yaml`](config/rules.yaml) (path set by `IBVAP_RULES_PATH`). Geometry uses normalised image coordinates (x, y from 0 to 1, origin top-left), the same space as Frigate's `path_data`, so it is independent of camera resolution.
 
 - **Zones:** our own `polygon`, or `frigate_zone: <name>` to reuse a zone defined in Frigate.
-- **Tripwires:** a polyline plus an `inbound_point` anywhere on the Indian side; crossing towards that side is *inbound*.
+- **Tripwires:** a polyline plus an `inbound_point` anywhere on the Indian side; crossing towards that side is *inbound*. `dead_zone` (default 0.03 of the frame) is a band around the line. A crossing only counts once the object is clearly past it, so someone moving about near the line does not trigger alert after alert.
 
 | Rule `type` | Fires when | Key options |
 |---|---|---|
@@ -59,7 +59,7 @@ The rules engine is deterministic and never calls Jev or the network.
 | GET | `/media/{id}/{snapshot\|clip}` | Streams the event's snapshot or clip from Frigate (502 if Frigate is unreachable) |
 | GET | `/ui/` | The operator dashboard, when `dashboard/dist` has been built |
 | GET | `/metrics/latency` | Frame → console latency p50/p95/max, split by stage |
-| WS | `/ws/alerts` | `snapshot` of open alerts on connect, then `event.created` / `event.updated` |
+| WS | `/ws/alerts` | On connect, a `snapshot` of the newest 500 open alerts (raw detections excluded); then `event.created` / `event.updated` |
 
 ## Behaviour notes
 

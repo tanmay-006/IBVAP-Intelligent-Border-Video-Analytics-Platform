@@ -302,3 +302,40 @@ def test_demo_rules_file_loads():
     config = load_rules("config/rules.yaml")
     assert len(config.version) == 12
     assert {"cam-fence-east", "cam-bop-road"} <= set(config.cameras)
+
+
+def test_jitter_around_the_line_raises_nothing(engine):
+    # Fence is at y≈0.40-0.42; dead zone 0.03. Wobble across it without leaving the band.
+    p = Obj(engine)
+    p.at(0.5, 0.39, DAY, kind="new")
+    fired = []
+    for i, y in enumerate([0.44, 0.39, 0.44, 0.38, 0.43]):
+        fired += by_rule(p.at(0.5, y, DAY + 1 + i))
+    assert "cross-in" not in fired
+
+
+def test_first_seen_on_the_line_then_walks_through_fires_once(engine):
+    p = Obj(engine)
+    p.at(0.5, 0.41, DAY, kind="new")  # inside the dead zone: side unknown
+    assert (
+        by_rule(p.at(0.5, 0.30, DAY + 1)).count("cross-in") == 0
+    )  # moved clear, outbound side, no crossing yet
+    assert by_rule(p.at(0.5, 0.60, DAY + 2)).count("cross-in") == 1
+
+
+def test_walking_around_the_end_of_a_short_line_is_not_a_crossing():
+    config = RulesConfig.model_validate(
+        {
+            "cameras": {
+                "cam": {
+                    "tripwires": {"gate": {"points": [[0.4, 0.5], [0.6, 0.5]], "inbound_point": [0.5, 0.9]}},
+                    "rules": [{"id": "in", "type": "tripwire", "tripwire": "gate", "direction": "any"}],
+                }
+            }
+        }
+    )
+    eng = RulesEngine(config, "BOP-TEST-01")
+    p = Obj(eng)
+    p.at(0.2, 0.3, DAY, kind="new")
+    alerts = p.at(0.2, 0.7, DAY + 1)  # passes left of the line's end
+    assert alerts == []

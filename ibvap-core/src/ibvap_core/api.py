@@ -41,7 +41,8 @@ ACTIONS: dict[str, AlertStatus] = {
     "close": AlertStatus.CLOSED,
 }
 
-WS_SNAPSHOT_LIMIT = 200
+# On connect a console receives the newest open alerts (raw detections excluded).
+WS_SNAPSHOT_LIMIT = 500
 
 
 class TransitionRequest(BaseModel):
@@ -153,6 +154,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         since: datetime | None = None,
         until: datetime | None = None,
         open_only: bool = False,
+        alerts_only: bool = False,
         order: Literal["time", "severity"] = "time",
         limit: int = Query(100, ge=1, le=1000),
         offset: int = Query(0, ge=0),
@@ -166,6 +168,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             since=since,
             until=until,
             open_only=open_only,
+            alerts_only=alerts_only,
             order=order,
             limit=limit,
             offset=offset,
@@ -277,7 +280,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pipeline: EventPipeline = ws.app.state.pipeline
         await ws.accept()
         open_events = await asyncio.to_thread(
-            pipeline.store.list, EventFilter(open_only=True, order="severity", limit=WS_SNAPSHOT_LIMIT)
+            pipeline.store.list,
+            EventFilter(open_only=True, alerts_only=True, order="time", limit=WS_SNAPSHOT_LIMIT),
         )
         await ws.send_json({"type": "snapshot", "events": [e.model_dump(mode="json") for e in open_events]})
         pipeline.broadcaster.add(ws)

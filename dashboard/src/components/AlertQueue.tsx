@@ -1,4 +1,4 @@
-import { EVENT_LABEL, SEVERITY_LABEL, STATUS_LABEL, formatIstTime, needsAttention, readable, timeAgo } from "../alerts";
+import { EVENT_LABEL, SEVERITY_LABEL, STATUS_LABEL, formatIstTime, needsAttention, readable, timeAgo, type QueueOrder } from "../alerts";
 import type { Camera, IbvapEvent } from "../types";
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
   onToggleDetections: () => void;
   onToggleClosed: () => void;
   onClearCamera: () => void;
+  order: QueueOrder;
+  onOrder: (o: QueueOrder) => void;
   now: number;
 }
 
@@ -23,6 +25,14 @@ export function AlertQueue(p: Props) {
         <h2>
           Alert queue <span className="count">{p.queue.length}</span>
         </h2>
+        <div className="segmented" role="radiogroup" aria-label="Order alerts by">
+          <button role="radio" aria-checked={p.order === "newest"} onClick={() => p.onOrder("newest")}>
+            Newest first
+          </button>
+          <button role="radio" aria-checked={p.order === "severity"} onClick={() => p.onOrder("severity")}>
+            Most severe first
+          </button>
+        </div>
         <div className="filters">
           <label>
             <input type="checkbox" checked={p.showClosed} onChange={p.onToggleClosed} /> Closed
@@ -40,7 +50,7 @@ export function AlertQueue(p: Props) {
 
       {p.queue.length === 0 ? (
         <p className="empty">
-          No open alerts. New alerts appear here as soon as a rule fires, most severe first.
+          No open alerts. New alerts appear here as soon as a rule fires.
         </p>
       ) : (
         <ol className="rows">
