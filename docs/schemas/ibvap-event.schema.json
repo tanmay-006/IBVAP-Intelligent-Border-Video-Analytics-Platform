@@ -51,6 +51,97 @@
       "title": "EventType",
       "type": "string"
     },
+    "EvidenceMedia": {
+      "additionalProperties": false,
+      "description": "Evidence captured for this alert by ibvap-core, at the alert's own time.\n\nRaw detections have no media record; they reference Frigate's tracked-object media.",
+      "properties": {
+        "snapshot_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the snapshot frame was grabbed (UTC)",
+          "title": "Snapshot At"
+        },
+        "snapshot_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot Sha256"
+        },
+        "clip_start": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clip Start"
+        },
+        "clip_end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clip End"
+        },
+        "clip_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "pending",
+                "ready",
+                "unavailable"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clip Status"
+        },
+        "clip_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clip Sha256"
+        }
+      },
+      "title": "EvidenceMedia",
+      "type": "object"
+    },
     "Explanation": {
       "additionalProperties": false,
       "description": "Why the alert fired, shown to the operator (CLAUDE.md \u00a79).",
@@ -214,7 +305,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "default": "1.0.0",
+      "default": "1.1.0",
       "title": "Schema Version",
       "type": "string"
     },
@@ -330,6 +421,17 @@
       ],
       "default": null,
       "title": "Clip Ref"
+    },
+    "media": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EvidenceMedia"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "plate_text": {
       "anyOf": [

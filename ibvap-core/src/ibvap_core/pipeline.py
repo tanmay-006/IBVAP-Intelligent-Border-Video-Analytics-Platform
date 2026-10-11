@@ -6,14 +6,16 @@ import asyncio
 import json
 import logging
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import WebSocket
 
 from ibvap_core.config import Settings
+from ibvap_core.evidence import EvidenceStore
 from ibvap_core.frigate_mapper import parse_frigate_event
 from ibvap_core.rules import RulesEngine
-from ibvap_core.schemas import AlertStatus, IBVAPEvent
+from ibvap_core.schemas import AlertStatus, EventType, IBVAPEvent
 from ibvap_core.store import EventStore, InvalidTransition
 
 log = logging.getLogger(__name__)
@@ -61,11 +63,14 @@ class EventPipeline:
         store: EventStore,
         broadcaster: Broadcaster,
         rules: RulesEngine | None = None,
+        evidence: EvidenceStore | None = None,
     ):
         self.settings = settings
         self.store = store
         self.broadcaster = broadcaster
         self.rules = rules
+        self.evidence = evidence
+        self._evidence_tasks: set[asyncio.Task] = set()
 
     async def handle_frigate_payload(self, payload: bytes | str, received_ts: float | None = None) -> None:
         received_ts = received_ts or time.time()
@@ -93,9 +98,6 @@ class EventPipeline:
             await self.publish_new(result.event)
         elif result.changed:
             await self.broadcaster.broadcast(event_message("event.updated", result.event))
-        if result.changed:
-            for alert in await asyncio.to_thread(self.store.propagate_media, result.event):
-                await self.broadcaster.broadcast(event_message("event.updated", alert))
 
     async def run_rule_timer(self, interval_s: float = 1.0) -> None:
         """Re-check dwell-time rules; stationary objects send few MQTT updates."""
@@ -124,6 +126,48 @@ class EventPipeline:
                 event.explanation.summary if event.explanation else "",
             )
             await self.publish_new(result.event)
+            if self.evidence is not None and event.event_type is not EventType.DETECTION:
+                task = asyncio.create_task(self.capture_evidence(event))
+                self._evidence_tasks.add(task)
+                task.add_done_callback(self._evidence_tasks.discard)
+
+    async def capture_evidence(self, event: IBVAPEvent) -> None:
+        """Snapshot now, clip once its window is recorded; each is pushed to consoles as it lands."""
+        assert self.evidence is not None
+        eid = str(event.event_id)
+        try:
+            snap = await self.evidence.snapshot(event)
+            start, end = self.evidence.clip_window(event)
+            media = {
+                "clip_status": "pending",
+                "clip_start": datetime.fromtimestamp(start, UTC),
+                "clip_end": datetime.fromtimestamp(end, UTC),
+            }
+            fields: dict = {}
+            if snap:
+                media |= {"snapshot_at": datetime.now(UTC), "snapshot_sha256": snap.sha256}
+                fields = {"snapshot_ref": snap.ref, "evidence_hash": snap.sha256}
+            updated = await asyncio.to_thread(self.store.update_media, eid, media=media, **fields)
+            await self.broadcaster.broadcast(event_message("event.updated", updated))
+
+            clip = await self.evidence.clip(event)
+            if clip:
+                updated = await asyncio.to_thread(
+                    self.store.update_media,
+                    eid,
+                    media={"clip_status": "ready", "clip_sha256": clip.sha256},
+                    clip_ref=clip.ref,
+                    evidence_hash=clip.sha256,
+                )
+            else:
+                updated = await asyncio.to_thread(
+                    self.store.update_media, eid, media={"clip_status": "unavailable"}
+                )
+            await self.broadcaster.broadcast(event_message("event.updated", updated))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("evidence capture failed for alert %s", eid)
 
     async def publish_new(self, event: IBVAPEvent) -> None:
         sent = await self.broadcaster.broadcast(event_message("event.created", event))

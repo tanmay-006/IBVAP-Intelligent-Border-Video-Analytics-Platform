@@ -18,6 +18,7 @@ function ev(id: string, over: Partial<IbvapEvent> = {}): IbvapEvent {
     direction: null,
     snapshot_ref: null,
     clip_ref: null,
+    media: null,
     plate_text: null,
     plate_confidence: null,
     plate_needs_review: false,

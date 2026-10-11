@@ -6,6 +6,7 @@ import {
   STATUS_LABEL,
   availableActions,
   formatIstDateTime,
+  formatIstTime,
   humanize,
   readable,
   type Action,
@@ -106,6 +107,29 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
     }
   };
 
+  const m = event.media;
+  const isAlert = event.event_type !== "detection";
+  const clipPending = m?.clip_status === "pending";
+  const clipNote = clipPending
+    ? "The clip covers 5 s before to 10 s after the alert. It is ready about 25 s after the alert."
+    : m?.clip_status === "unavailable"
+      ? "No recording was available for this alert's time window."
+      : "No clip was recorded for this event.";
+  const snapshotNote = snapshotFailed
+    ? "This snapshot could not be loaded. It may have passed the retention period, or Frigate may be down."
+    : isAlert && !m
+      ? "Capturing the snapshot…"
+      : "No snapshot was captured for this event. Check that Frigate is running at the BOP.";
+  const snapshotCaption = !event.snapshot_ref
+    ? ""
+    : m?.snapshot_at
+      ? `Snapshot taken at ${formatIstDateTime(m.snapshot_at)}, when the alert fired.`
+      : "Frigate's best snapshot of this tracked object (raw detection), not tied to one moment.";
+  const clipCaption =
+    m?.clip_start && m?.clip_end
+      ? `Clip from ${formatIstTime(m.clip_start)} to ${formatIstTime(m.clip_end)} IST: 5 s before to 10 s after the alert.`
+      : "Frigate's clip of the whole tracked object (raw detection).";
+
   const params = Object.entries(event.explanation?.parameters ?? {}).filter(([k]) => !HIDDEN_PARAMS.has(k));
   const actions = availableActions(event.status);
 
@@ -136,6 +160,8 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
       </>,
     ]);
   rows.push(["Decided by", decisionText(event)]);
+  if (event.evidence_hash)
+    rows.push(["Evidence SHA-256", <small className="hash">{event.evidence_hash}</small>]);
   if (event.tracking_id)
     rows.push(["Track", <small>{event.tracking_id} (a tracking number, not an identity)</small>]);
 
@@ -175,9 +201,9 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
                 aria-selected={media === "clip"}
                 disabled={!event.clip_ref}
                 onClick={() => setMedia("clip")}
-                title={event.clip_ref ? undefined : "No clip recorded for this event yet"}
+                title={event.clip_ref ? undefined : clipNote}
               >
-                Clip
+                {clipPending ? "Clip (preparing)" : "Clip"}
               </button>
             </div>
           </div>
@@ -185,21 +211,19 @@ export function AlertDetail({ event, camera, onUpdated }: Props) {
             className={`video-frame${(media === "clip" && event.clip_ref) || (event.snapshot_ref && !snapshotFailed) ? "" : " no-media"}`}
           >
             {media === "clip" && event.clip_ref ? (
-              <video key={event.event_id} src={mediaUrl(event.event_id, "clip")} controls autoPlay />
+              <video key={event.clip_ref} src={mediaUrl(event.event_id, "clip")} controls autoPlay preload="auto" />
             ) : event.snapshot_ref && !snapshotFailed ? (
               <img
+                key={event.snapshot_ref}
                 src={mediaUrl(event.event_id, "snapshot")}
                 alt={`Snapshot of ${event.object_type ?? "object"} on ${camera?.name ?? event.camera_id}`}
                 onError={() => setSnapshotFailed(true)}
               />
             ) : (
-              <p className="media-empty">
-                {event.snapshot_ref
-                  ? "Snapshot could not be loaded. Check that Frigate is running at the BOP."
-                  : "No snapshot was recorded for this event."}
-              </p>
+              <p className="media-empty">{snapshotNote}</p>
             )}
           </div>
+          <p className="evidence-caption">{media === "clip" && event.clip_ref ? clipCaption : snapshotCaption}</p>
         </section>
 
         <div className="detail-columns">

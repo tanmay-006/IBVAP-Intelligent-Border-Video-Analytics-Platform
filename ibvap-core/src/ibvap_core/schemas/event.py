@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 
 class Severity(StrEnum):
@@ -134,6 +134,22 @@ class Explanation(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+class EvidenceMedia(BaseModel):
+    """Evidence captured for this alert by ibvap-core, at the alert's own time.
+
+    Raw detections have no media record; they reference Frigate's tracked-object media.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_at: datetime | None = Field(None, description="When the snapshot frame was grabbed (UTC)")
+    snapshot_sha256: str | None = Field(None, pattern=r"^[0-9a-f]{64}$")
+    clip_start: datetime | None = None
+    clip_end: datetime | None = None
+    clip_status: Literal["pending", "ready", "unavailable"] | None = None
+    clip_sha256: str | None = Field(None, pattern=r"^[0-9a-f]{64}$")
+
+
 class IBVAPEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -153,6 +169,7 @@ class IBVAPEvent(BaseModel):
 
     snapshot_ref: str | None = None
     clip_ref: str | None = None
+    media: EvidenceMedia | None = None
 
     plate_text: str | None = None
     plate_confidence: float | None = Field(None, ge=0.0, le=1.0)

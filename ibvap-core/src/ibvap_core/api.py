@@ -18,12 +18,13 @@ from uuid import UUID
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ibvap_core.config import Settings, get_settings
 from ibvap_core.db import make_engine, make_sessionmaker
+from ibvap_core.evidence import EvidenceStore
 from ibvap_core.mqtt_consumer import MqttConsumer
 from ibvap_core.pipeline import Broadcaster, EventPipeline, event_message
 from ibvap_core.rules import RulesEngine, load_rules
@@ -90,6 +91,14 @@ def _load_rules_engine(settings: Settings) -> RulesEngine | None:
     return RulesEngine(config, settings.site_id)
 
 
+async def _evidence_cleanup(evidence: EvidenceStore, interval_s: float = 600) -> None:
+    while True:
+        removed = await asyncio.to_thread(evidence.cleanup)
+        if removed:
+            log.info("evidence retention: removed %d files", removed)
+        await asyncio.sleep(interval_s)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -98,11 +107,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = make_engine(settings.database_url)
         store = EventStore(make_sessionmaker(engine))
-        pipeline = EventPipeline(settings, store, Broadcaster(), _load_rules_engine(settings))
+        app.state.http_transport = None  # tests inject a mock transport for Frigate
+        evidence = (
+            EvidenceStore(
+                settings.evidence_dir,
+                settings.frigate_api_url,
+                pre_s=settings.clip_pre_s,
+                post_s=settings.clip_post_s,
+                max_mb=settings.evidence_max_mb,
+                retention_days=settings.evidence_retention_days,
+            )
+            if settings.evidence_enabled
+            else None
+        )
+        app.state.evidence = evidence
+        pipeline = EventPipeline(settings, store, Broadcaster(), _load_rules_engine(settings), evidence)
         app.state.pipeline = pipeline
         app.state.mqtt = None
-        app.state.http_transport = None  # tests inject a mock transport for Frigate
         tasks = [asyncio.create_task(pipeline.run_rule_timer())]
+        if evidence is not None:
+            tasks.append(asyncio.create_task(_evidence_cleanup(evidence)))
         if settings.mqtt_enabled:
             app.state.mqtt = MqttConsumer(settings, pipeline)
             tasks.append(asyncio.create_task(app.state.mqtt.run()))
@@ -229,13 +253,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/media/{event_id}/{kind}")
     async def media(
         event_id: UUID, kind: Literal["snapshot", "clip"], store: Store, request: Request
-    ) -> StreamingResponse:
-        """Stream an event's snapshot or clip from Frigate, so consoles never talk to Frigate directly."""
+    ) -> Response:
+        """An event's snapshot or clip: alert evidence from our store, or Frigate media for raw detections.
+
+        Consoles never talk to Frigate directly.
+        """
         try:
             event = await asyncio.to_thread(store.get, str(event_id))
         except EventNotFound:
             raise HTTPException(404, "event not found") from None
         ref = event.snapshot_ref if kind == "snapshot" else event.clip_ref
+        if not ref and kind == "clip" and event.media and event.media.clip_status == "pending":
+            raise HTTPException(404, "the clip is still being prepared")
+        if ref and ref.startswith("evidence:"):
+            evidence: EvidenceStore | None = request.app.state.evidence
+            path = evidence.path(ref) if evidence else None
+            if path is None:
+                raise HTTPException(404, f"this {kind} is no longer stored (retention)")
+            return FileResponse(path, media_type="image/jpeg" if kind == "snapshot" else "video/mp4")
         if not ref or not ref.startswith("frigate:"):
             raise HTTPException(404, f"no {kind} recorded for this event")
         url = settings.frigate_api_url.rstrip("/") + ref.removeprefix("frigate:")

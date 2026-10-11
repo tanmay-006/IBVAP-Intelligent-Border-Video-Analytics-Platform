@@ -95,7 +95,8 @@ class RulesEngine:
         self.config = config
         self.site_id = site_id
         self.tracks: dict[tuple[str, str], Track] = {}
-        self._last_fire: dict[tuple[str, str], float] = {}
+        # (camera, cooldown group, track id or "*") -> (time, severity rank) of the last alert
+        self._last_fire: dict[tuple[str, str, str], tuple[float, int]] = {}
 
     # ------------------------------------------------------------------ inputs
 
@@ -147,7 +148,7 @@ class RulesEngine:
 
     def _drop(self, key: tuple[str, str]) -> None:
         del self.tracks[key]
-        for cooldown_key in [k for k in self._last_fire if k[1] == key[1]]:
+        for cooldown_key in [k for k in self._last_fire if k[0] == key[0] and k[2] == key[1]]:
             del self._last_fire[cooldown_key]
 
     # --------------------------------------------------------------- movement
@@ -455,15 +456,21 @@ class RulesEngine:
         direction: Direction | None = None,
     ) -> IBVAPEvent | None:
         track_key = track.track_id if track else "*"
-        cooldown_key = (rule.id, track_key)
-        last = self._last_fire.get(cooldown_key)
-        if last is not None and t - last < rule.cooldown_s:
-            return None
-        self._last_fire[cooldown_key] = t
-
         camera = track.camera if track else camera
         night = self.is_night(t)
         severity = rule.night_severity if night and rule.night_severity else rule.severity
+
+        # Cooldown: within it, only a more severe alert for the same group gets through
+        # (e.g. stepping out then straight back in still raises the inbound alert).
+        group = rule.cooldown_group or (
+            f"tripwire:{rule.tripwire}" if isinstance(rule, TripwireRule) else rule.id
+        )
+        scope = "*" if rule.cooldown_scope == "camera" else track_key
+        cooldown_key = (str(camera), group, scope)
+        last = self._last_fire.get(cooldown_key)
+        if last is not None and t - last[0] < rule.cooldown_s and severity.rank <= last[1]:
+            return None
+        self._last_fire[cooldown_key] = (t, severity.rank)
         explanation_params = {
             "rule_type": rule.type,  # type: ignore[attr-defined]
             "night": night,
@@ -487,10 +494,6 @@ class RulesEngine:
             detection_confidence=track.confidence if track else None,
             zone_id=zone_id,
             direction=direction,
-            snapshot_ref=f"frigate:/api/events/{track.track_id}/snapshot.jpg"
-            if track and track.has_snapshot
-            else None,
-            clip_ref=f"frigate:/api/events/{track.track_id}/clip.mp4" if track and track.has_clip else None,
             versions=Versions(rule_id=rule.id, rule_version=self.config.version),
             explanation=Explanation(summary=summary, parameters=explanation_params),
         )

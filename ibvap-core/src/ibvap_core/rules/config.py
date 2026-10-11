@@ -95,6 +95,16 @@ class RuleBase(Strict):
     night_severity: Severity | None = None
     schedule: Literal["always", "night", "day"] = "always"
     cooldown_s: float = Field(60, ge=0)
+    cooldown_scope: Literal["track", "camera"] = Field(
+        "track",
+        description="track: one alert per tracked object per cooldown; camera: one per camera, which also "
+        "absorbs the new track IDs a detector assigns when it briefly loses someone",
+    )
+    cooldown_group: str | None = Field(
+        None,
+        description="Rules with the same group share one cooldown. Tripwire rules on the same line share "
+        "one by default, so crossing in and straight back out is one alert",
+    )
 
 
 class TripwireRule(RuleBase):

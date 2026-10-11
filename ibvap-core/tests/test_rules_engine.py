@@ -261,7 +261,7 @@ def test_end_and_ttl_drop_tracks(engine):
     b.at(0.1, 0.9, DAY, kind="new")
     engine.tick(DAY + 61)
     assert ("cam", "b") not in engine.tracks
-    assert not [k for k in engine._last_fire if k[1] in {"a", "b"}]
+    assert not [k for k in engine._last_fire if k[2] in {"a", "b"}]
 
 
 def test_unconfigured_camera_is_ignored(engine):
@@ -339,3 +339,72 @@ def test_walking_around_the_end_of_a_short_line_is_not_a_crossing():
     p.at(0.2, 0.3, DAY, kind="new")
     alerts = p.at(0.2, 0.7, DAY + 1)  # passes left of the line's end
     assert alerts == []
+
+
+def _config_with(rules, camera_extra=None):
+    cam = {
+        "zones": {"right": {"polygon": [[0.5, 0], [1, 0], [1, 1], [0.5, 1]]}},
+        "tripwires": {"gate": {"points": [[0.5, 0], [0.5, 1]], "inbound_point": [0.9, 0.5]}},
+        "rules": rules,
+    }
+    cam.update(camera_extra or {})
+    return RulesEngine(RulesConfig.model_validate({"cameras": {"cam": cam}}), "BOP-TEST-01")
+
+
+GATE_RULES = [
+    {
+        "id": "in",
+        "type": "tripwire",
+        "tripwire": "gate",
+        "direction": "inbound",
+        "severity": "high",
+        "cooldown_s": 60,
+    },
+    {
+        "id": "out",
+        "type": "tripwire",
+        "tripwire": "gate",
+        "direction": "outbound",
+        "severity": "medium",
+        "cooldown_s": 60,
+    },
+]
+
+
+def test_crossing_in_then_straight_back_out_is_one_alert():
+    eng = _config_with(GATE_RULES)
+    p = Obj(eng)
+    p.at(0.2, 0.9, DAY, kind="new")
+    fired = by_rule(p.at(0.8, 0.9, DAY + 1)) + by_rule(p.at(0.2, 0.9, DAY + 3))
+    assert fired == ["in"]
+
+
+def test_more_severe_crossing_gets_through_the_cooldown():
+    eng = _config_with(GATE_RULES)
+    p = Obj(eng)
+    p.at(0.8, 0.9, DAY, kind="new")
+    fired = by_rule(p.at(0.2, 0.9, DAY + 1)) + by_rule(p.at(0.8, 0.9, DAY + 3))
+    assert fired == ["out", "in"]  # out (medium), then back in (high) is not suppressed
+
+
+def test_camera_scope_cooldown_absorbs_new_track_ids():
+    rules = [
+        {
+            "id": "loiter",
+            "type": "loitering",
+            "zone": "right",
+            "dwell_s": 10,
+            "cooldown_s": 300,
+            "cooldown_scope": "camera",
+        }
+    ]
+    eng = _config_with(rules)
+    first = Obj(eng, fid="t1")
+    first.at(0.8, 0.9, DAY, kind="new")
+    assert by_rule(eng.tick(DAY + 11)) == ["loiter"]
+    first.send(DAY + 12, kind="end")
+    second = Obj(eng, fid="t2")  # same person, new track id from the detector
+    second.at(0.8, 0.9, DAY + 13, kind="new")
+    assert by_rule(eng.tick(DAY + 30)) == []
+    second.send(DAY + 300)  # Frigate keeps reporting the stationary person
+    assert by_rule(eng.tick(DAY + 320)) == ["loiter"]  # still there after the cooldown

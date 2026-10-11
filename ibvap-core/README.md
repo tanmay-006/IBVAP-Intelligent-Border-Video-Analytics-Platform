@@ -38,13 +38,33 @@ Configured per camera in [`config/rules.yaml`](config/rules.yaml) (path set by `
 | `wrong_direction` | Movement within a zone deviates from `allowed_direction` by more than `tolerance_deg` | `zone`, `allowed_direction`, `tolerance_deg`, `min_distance` |
 | `group_forming` | `min_count` matching objects in a zone at once | `zone`, `min_count` |
 
-Common options on every rule: `objects`, `min_confidence`, `night_min_confidence` (higher sensitivity at night), `severity`, `night_severity`, `schedule: always|night|day`, `cooldown_s`, `enabled`. The night window (`night:` block) defaults to 18:30–06:00 Asia/Kolkata.
+Common options on every rule: `objects`, `min_confidence`, `night_min_confidence` (higher sensitivity at night), `severity`, `night_severity`, `schedule: always|night|day`, `cooldown_s`, `cooldown_scope`, `cooldown_group`, `enabled`.
+
+**Cooldowns** stop alert floods:
+- Within `cooldown_s`, a rule does not raise another alert, unless the new one is **more severe** than the last. Stepping out and straight back in still raises the inbound alert.
+- **`cooldown_scope`:**
+  - `track` (default): applies per tracked object.
+  - `camera`: applies to the whole camera. This also absorbs the new track IDs the detector assigns when it briefly loses someone, which is useful for close-up cameras.
+- **`cooldown_group`:** rules with the same group share one cooldown. All tripwire rules on the same line share one automatically, so crossing in and straight back out is one alert. The night window (`night:` block) defaults to 18:30–06:00 Asia/Kolkata.
 
 Every alert records the rule id, the rules-file version (short SHA-256), and an explanation with the measured values (dwell time, angle, count, direction, night flag), so operators can see why it fired.
 
 How positions are read: Frigate adds a point to `path_data` whenever an object moves about 5% of the frame. The engine tests each new segment against tripwires and zones, so crossings are caught even when MQTT updates are sparse. A stationary object sends few updates, so dwell rules are also re-checked every second. "Stopped" means no new path point. Tracks are dropped on Frigate's `end` message or after `track_ttl_s` without updates.
 
 The rules engine is deterministic and never calls Jev or the network.
+
+## Evidence
+
+Every alert gets its own evidence, captured at the alert's time, not the tracked object's lifetime:
+
+| Evidence | When | How |
+|---|---|---|
+| Snapshot | As soon as the alert fires | The camera's current frame from Frigate (`latest.jpg`, detection boxes and timestamp burned in) |
+| Clip | About 25 s after the alert, once recorded | Frigate's recordings from 5 s before to 10 s after the alert (`/start/…/end/…/clip.mp4`), retried while segments are written |
+
+- Files are stored in `ibvap-core/data/evidence/` with their SHA-256. The alert records `media` (snapshot time, clip window, clip status, hashes), and its `evidence_hash` is the clip's SHA-256, or the snapshot's until the clip is ready. Phase 5 anchors these hashes on the ledger.
+- Retention: `IBVAP_EVIDENCE_RETENTION_DAYS` (default 2) and a size cap, `IBVAP_EVIDENCE_MAX_MB` (default 1000, oldest removed first).
+- Raw Frigate detections keep Frigate's own tracked-object snapshot and clip.
 
 ## API
 
@@ -56,7 +76,7 @@ The rules engine is deterministic and never calls Jev or the network.
 | GET | `/events/{id}/audit` | Lifecycle audit trail |
 | POST | `/alerts/{id}/{ack\|verify\|reject\|escalate\|close}` | Lifecycle transition, body `{"actor": "...", "note": "..."}`; 409 if not allowed |
 | GET | `/cameras` | Cameras from `config/site.yaml` (name, map position) merged with cameras that have sent events |
-| GET | `/media/{id}/{snapshot\|clip}` | Streams the event's snapshot or clip from Frigate (502 if Frigate is unreachable) |
+| GET | `/media/{id}/{snapshot\|clip}` | An alert's own evidence (from the evidence store, seekable), or Frigate's media for raw detections. 404 while a clip is still being prepared |
 | GET | `/ui/` | The operator dashboard, when `dashboard/dist` has been built |
 | GET | `/metrics/latency` | Frame → console latency p50/p95/max, split by stage |
 | WS | `/ws/alerts` | On connect, a `snapshot` of the newest 500 open alerts (raw detections excluded); then `event.created` / `event.updated` |

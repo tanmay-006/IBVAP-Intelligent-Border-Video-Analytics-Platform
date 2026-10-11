@@ -16,6 +16,8 @@ def settings(tmp_path):
         rules_path=str(tmp_path / "no-rules.yaml"),
         site_path=str(tmp_path / "no-site.yaml"),
         dashboard_dir=str(tmp_path / "no-dashboard"),
+        evidence_enabled=False,
+        evidence_dir=str(tmp_path / "evidence"),
         frigate_api_url="http://frigate.test:5000",
     )
 

@@ -34,6 +34,16 @@ export interface JevDecision {
   latency_ms: number | null;
 }
 
+/** Evidence captured by ibvap-core at the alert's own time (absent on raw detections). */
+export interface EvidenceMedia {
+  snapshot_at: string | null;
+  snapshot_sha256: string | null;
+  clip_start: string | null;
+  clip_end: string | null;
+  clip_status: "pending" | "ready" | "unavailable" | null;
+  clip_sha256: string | null;
+}
+
 export interface IbvapEvent {
   schema_version: string;
   event_id: string;
@@ -49,6 +59,7 @@ export interface IbvapEvent {
   direction: "inbound" | "outbound" | "along" | "unknown" | null;
   snapshot_ref: string | null;
   clip_ref: string | null;
+  media: EvidenceMedia | null;
   plate_text: string | null;
   plate_confidence: number | null;
   plate_needs_review: boolean;

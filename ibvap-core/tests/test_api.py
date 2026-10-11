@@ -98,6 +98,7 @@ def test_no_console_means_not_delivered(client):
 
 def test_rules_alert_flows_through_pipeline(settings, tmp_path):
     import shutil
+    from datetime import UTC, datetime
 
     from fastapi.testclient import TestClient
 
@@ -105,8 +106,6 @@ def test_rules_alert_flows_through_pipeline(settings, tmp_path):
 
     shutil.copy("config/rules.yaml", tmp_path / "rules.yaml")
     settings = settings.model_copy(update={"rules_path": str(tmp_path / "rules.yaml")})
-    from datetime import UTC, datetime
-
     day = datetime(2026, 10, 10, 6, 20, tzinfo=UTC).timestamp()  # 11:50 IST: crossing is High, not Critical
     with TestClient(create_app(settings)) as client:
         assert client.get("/health").json()["rules_version"]
@@ -115,22 +114,15 @@ def test_rules_alert_flows_through_pipeline(settings, tmp_path):
         client.portal.call(client.app.state.pipeline.handle_frigate_payload, json.dumps(msg))
         path.append((0.5, 0.6, day + 2))
         msg = frigate_message(
-            "update", camera="cam-fence-east", path=path, frame_time=day + 2, start_time=day
+            "end", camera="cam-fence-east", path=path, frame_time=day + 2, start_time=day, has_clip=True
         )
         client.portal.call(client.app.state.pipeline.handle_frigate_payload, json.dumps(msg))
 
         alerts = client.get("/events", params={"event_type": "tripwire_crossing"}).json()
         assert len(alerts) == 1
         assert alerts[0]["severity"] == "high"
-        assert alerts[0]["clip_ref"] is None
-
-        # Clip confirmed when the object ends → copied onto the alert.
-        msg = frigate_message(
-            "end", camera="cam-fence-east", path=path, frame_time=day + 5, start_time=day, has_clip=True
-        )
-        client.portal.call(client.app.state.pipeline.handle_frigate_payload, json.dumps(msg))
-        alert = client.get(f"/events/{alerts[0]['event_id']}").json()
-        assert alert["clip_ref"].endswith("/clip.mp4")
+        # Alerts never borrow the tracked object's whole-lifetime snapshot or clip.
+        assert alerts[0]["snapshot_ref"] is None and alerts[0]["clip_ref"] is None
 
 
 def test_cameras_merge_site_config_with_seen(settings, tmp_path):

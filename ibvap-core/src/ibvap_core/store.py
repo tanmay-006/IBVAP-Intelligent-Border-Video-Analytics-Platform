@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ibvap_core.db import AuditRow, CameraRow, EventRow
-from ibvap_core.schemas import AlertStatus, EventType, IBVAPEvent, Severity, can_transition
+from ibvap_core.schemas import AlertStatus, EventType, EvidenceMedia, IBVAPEvent, Severity, can_transition
 
 CLOSED_STATUSES = {AlertStatus.CLOSED.value, AlertStatus.REJECTED.value}
 
@@ -123,32 +123,19 @@ class EventStore:
             _apply(row, merged)
             return UpsertResult(event=merged, created=False, changed=True)
 
-    def propagate_media(self, source: IBVAPEvent) -> list[IBVAPEvent]:
-        """Copy snapshot/clip refs from a detection onto rule alerts raised for the same tracked object.
-
-        Frigate only confirms a clip once the object ends, usually after the alert fired.
-        """
-        if not source.tracking_id or not (source.snapshot_ref or source.clip_ref):
-            return []
-        stmt = select(EventRow).where(
-            EventRow.camera_id == source.camera_id,
-            EventRow.tracking_id == source.tracking_id,
-            EventRow.event_type != EventType.DETECTION.value,
-        )
-        updated: list[IBVAPEvent] = []
+    def update_media(self, event_id: str, *, media: dict[str, Any], **fields: Any) -> IBVAPEvent:
+        """Attach captured evidence to an alert, merging with its current state (status may have moved on)."""
         with self._sessions.begin() as session:
-            for row in session.scalars(stmt):
-                alert = IBVAPEvent.model_validate(row.payload)
-                changes = {
-                    f: getattr(source, f)
-                    for f in ("snapshot_ref", "clip_ref")
-                    if getattr(source, f) and getattr(alert, f) is None
-                }
-                if changes:
-                    alert = alert.model_copy(update=changes)
-                    _apply(row, alert)
-                    updated.append(alert)
-        return updated
+            row = session.get(EventRow, event_id, with_for_update=True)
+            if row is None:
+                raise EventNotFound(event_id)
+            event = IBVAPEvent.model_validate(row.payload)
+            current = event.media.model_dump() if event.media else {}
+            updated = event.model_copy(
+                update={**fields, "media": EvidenceMedia.model_validate({**current, **media})}
+            )
+            _apply(row, updated)
+            return updated
 
     def mark_broadcast(self, event_id: str, ts: float) -> None:
         with self._sessions.begin() as session:

@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     # Frigate's internal API (port 5000), used to proxy snapshots and clips to the dashboard.
     frigate_api_url: str = Field("http://localhost:5000", validation_alias=_env("FRIGATE_API_URL"))
 
+    # Evidence store: per-alert snapshot + clip captured from Frigate at the alert's time.
+    evidence_enabled: bool = Field(True, validation_alias=_env("IBVAP_EVIDENCE_ENABLED"))
+    evidence_dir: str = Field("data/evidence", validation_alias=_env("IBVAP_EVIDENCE_DIR"))
+    evidence_max_mb: float = Field(1000, validation_alias=_env("IBVAP_EVIDENCE_MAX_MB"))
+    evidence_retention_days: float = Field(2, validation_alias=_env("IBVAP_EVIDENCE_RETENTION_DAYS"))
+    clip_pre_s: float = Field(5, validation_alias=_env("IBVAP_CLIP_PRE_S"))
+    clip_post_s: float = Field(10, validation_alias=_env("IBVAP_CLIP_POST_S"))
+
     # Browser-facing go2rtc address (Frigate's live-view server). The dashboard embeds
     # {live_view_url}/stream.html for cameras that have a `live_stream` in site.yaml.
     live_view_url: str = Field("http://127.0.0.1:1984", validation_alias=_env("IBVAP_LIVE_VIEW_URL"))
@@ -46,7 +54,7 @@ class Settings(BaseSettings):
     # Plate reads below this score are flagged for human review (CLAUDE.md §4, ANPR).
     plate_review_threshold: float = Field(0.8, validation_alias=_env("IBVAP_PLATE_REVIEW_THRESHOLD"))
 
-    @field_validator("rules_path", "site_path", "dashboard_dir")
+    @field_validator("rules_path", "site_path", "dashboard_dir", "evidence_dir")
     @classmethod
     def _from_core_dir(cls, value: str) -> str:
         path = Path(value)

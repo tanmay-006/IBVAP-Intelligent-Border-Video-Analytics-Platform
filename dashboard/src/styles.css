@@ -575,3 +575,6 @@ input[type="checkbox"] { height: auto; accent-color: var(--primary); }
 
 .queue-head .segmented { order: 3; flex-basis: 100%; }
 .queue-head .segmented button { flex: 1; }
+
+.evidence-caption { margin: 0.5rem 0 0; color: var(--text-3); font-size: var(--step--1); min-height: 1.2em; }
+.hash { font-variant-numeric: tabular-nums; word-break: break-all; }

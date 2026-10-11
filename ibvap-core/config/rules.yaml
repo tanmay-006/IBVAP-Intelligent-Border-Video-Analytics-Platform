@@ -124,7 +124,8 @@ cameras:
         night_min_confidence: 0.45
         severity: high
         night_severity: critical
-        cooldown_s: 20
+        cooldown_s: 60
+        cooldown_scope: camera   # the webcam re-tracks a seated person often
       - id: gate-crossing-outbound
         type: tripwire
         tripwire: gate_line
@@ -132,14 +133,16 @@ cameras:
         objects: [person, car, motorcycle, truck]
         severity: medium
         night_severity: high
-        cooldown_s: 20
+        cooldown_s: 60
+        cooldown_scope: camera
       - id: gate-night-movement
         type: night_movement
         zone: gate_inside
         objects: [person, car, motorcycle, truck]
         min_confidence: 0.45
         severity: high
-        cooldown_s: 120
+        cooldown_s: 300
+        cooldown_scope: camera
       - id: gate-loitering
         type: loitering
         zone: gate_inside
@@ -147,3 +150,4 @@ cameras:
         severity: medium
         night_severity: high
         cooldown_s: 300
+        cooldown_scope: camera

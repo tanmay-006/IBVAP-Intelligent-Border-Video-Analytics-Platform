@@ -12,11 +12,13 @@ srt: false
 paths:
   # Laptop webcam -> rtsp://mediamtx:8554/webcam
   # A keyframe every second (-g 15 at 15 fps) keeps live-view start-up and delay low.
+  # Bitrate is capped (~2.5 Mbit/s): recordings and 15 s evidence clips stay small.
   webcam:
     runOnInit: >-
       ffmpeg -hide_banner -loglevel error
       -f v4l2 -input_format mjpeg -framerate 15 -video_size 1280x720 -i /dev/video0
       -c:v libx264 -preset ultrafast -tune zerolatency -g 15 -keyint_min 15 -pix_fmt yuv420p
+      -crf 26 -maxrate 2500k -bufsize 5000k
       -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: true
 
